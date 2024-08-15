@@ -32,13 +32,15 @@
         .form-group {
             flex: 1;
             margin-right: 10px;
+            display: flex;
+            align-items: center;
         }
         .form-group:last-child {
             margin-right: 0;
         }
         label {
-            display: block;
-            margin-bottom: 5px;
+            margin-right: 10px;
+            white-space: nowrap;
         }
         input[type="text"], input[type="number"], select {
             width: 100%;
@@ -47,9 +49,12 @@
             border-radius: 4px;
             box-sizing: border-box;
         }
+        .button-group {
+            display: flex;
+            justify-content: space-between;
+        }
         button {
-            display: block;
-            width: 100%;
+            flex: 1;
             padding: 10px;
             background: #5cb85c;
             color: white;
@@ -57,6 +62,10 @@
             border-radius: 4px;
             cursor: pointer;
             margin-top: 20px;
+            margin-right: 10px;
+        }
+        button:last-child {
+            margin-right: 0;
         }
         button:hover {
             background: #4cae4c;
@@ -115,18 +124,24 @@
             </div>
         </div>
         
-        <div class="form-group">
-            <label for="prompt">提示词：</label>
-            <input type="text" id="prompt" placeholder="输入提示词">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="prompt">提示词：</label>
+                <input type="text" id="prompt" placeholder="输入提示词">
+            </div>
         </div>
         
-        <div class="form-group">
-            <label for="negativePrompt">负面提示词：</label>
-            <input type="text" id="negativePrompt" placeholder="输入负面提示词">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="negativePrompt">负面提示词：</label>
+                <input type="text" id="negativePrompt" placeholder="输入负面提示词">
+            </div>
         </div>
         
-        <button onclick="switchModel()">切换模型</button>
-        <button onclick="generateImages()">生成图片</button>
+        <div class="button-group">
+            <button onclick="switchModel()">切换模型</button>
+            <button onclick="generateImages()">生成图片</button>
+        </div>
         
         <div id="status">状态：空闲</div>
         <div id="result"></div>
