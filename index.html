@@ -24,14 +24,25 @@
             text-align: center;
             color: #333;
         }
+        .form-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .form-group {
+            flex: 1;
+            margin-right: 10px;
+        }
+        .form-group:last-child {
+            margin-right: 0;
+        }
         label {
             display: block;
-            margin-top: 10px;
+            margin-bottom: 5px;
         }
         input[type="text"], input[type="number"], select {
             width: 100%;
             padding: 8px;
-            margin-top: 5px;
             border: 1px solid #ddd;
             border-radius: 4px;
             box-sizing: border-box;
@@ -73,34 +84,46 @@
     <div class="container">
         <h1>Stable Diffusion WebUI 控制面板</h1>
         
-        <label for="model">选择模型：</label>
-        <select id="model">
-            <option value="v1-5-pruned-emaonly.safetensors">v1-5-pruned-emaonly</option>
-            <option value="sd-v1-4.ckpt">SD v1.4</option>
-            <!-- 添加更多模型选项 -->
-        </select>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="model">模型：</label>
+                <select id="model">
+                    <option value="v1-5-pruned-emaonly.safetensors">v1-5-pruned-emaonly</option>
+                    <option value="sd-v1-4.ckpt">SD v1.4</option>
+                    <!-- 添加更多模型选项 -->
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="width">宽度：</label>
+                <input type="number" id="width" value="512" min="64" max="2048" step="64">
+            </div>
+            <div class="form-group">
+                <label for="height">高度：</label>
+                <input type="number" id="height" value="512" min="64" max="2048" step="64">
+            </div>
+            <div class="form-group">
+                <label for="numImages">数量：</label>
+                <select id="numImages">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="4">4</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="seed">种子：</label>
+                <input type="number" id="seed" value="-1" min="-1">
+            </div>
+        </div>
         
-        <label for="prompt">提示词：</label>
-        <input type="text" id="prompt" placeholder="输入提示词">
+        <div class="form-group">
+            <label for="prompt">提示词：</label>
+            <input type="text" id="prompt" placeholder="输入提示词">
+        </div>
         
-        <label for="negativePrompt">负面提示词：</label>
-        <input type="text" id="negativePrompt" placeholder="输入负面提示词">
-        
-        <label for="width">宽度：</label>
-        <input type="number" id="width" value="512" min="64" max="2048" step="64">
-        
-        <label for="height">高度：</label>
-        <input type="number" id="height" value="512" min="64" max="2048" step="64">
-        
-        <label for="numImages">图片数量：</label>
-        <select id="numImages">
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="4">4</option>
-        </select>
-        
-        <label for="seed">种子（-1 为随机）：</label>
-        <input type="number" id="seed" value="-1" min="-1">
+        <div class="form-group">
+            <label for="negativePrompt">负面提示词：</label>
+            <input type="text" id="negativePrompt" placeholder="输入负面提示词">
+        </div>
         
         <button onclick="switchModel()">切换模型</button>
         <button onclick="generateImages()">生成图片</button>
