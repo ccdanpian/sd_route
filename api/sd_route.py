@@ -29,8 +29,9 @@ output_dir = os.getenv('SD_OUTPUT_DIR', 'output')
 logger.info(f"SD_URL: {SD_URL}")
 logger.info(f"Output directory: {output_dir}")
 
-# 全局变量来存储当前状态
+# 全局变量来存储当前状态和进度
 current_status = "空闲"
+current_progress = 0
 status_lock = threading.Lock()
 
 @app.route('/')
@@ -38,11 +39,13 @@ def index():
     logger.info("访问主页")
     return send_from_directory('static', 'index.html')
 
-def update_status(message):
-    global current_status
+def update_status(message, progress=None):
+    global current_status, current_progress
     with status_lock:
         current_status = message
-    logger.info(f"状态更新: {message}")
+        if progress is not None:
+            current_progress = progress
+    logger.info(f"状态更新: {message}, 进度: {progress}%")
 
 def generate_images(model, prompt, negative_prompt, width, height, num_images, seed):
     if seed == -1:
@@ -64,7 +67,7 @@ def generate_images(model, prompt, negative_prompt, width, height, num_images, s
 
     logger.debug(f"Payload: {json.dumps(payload, indent=2)}")
     
-    update_status(f"正在使用模型 {model} 生成图片...")
+    update_status(f"正在使用模型 {model} 生成图片...", 0)
     try:
         logger.info(f"发送请求到 {SD_URL}/sdapi/v1/txt2img")
         response = requests.post(url=f'{SD_URL}/sdapi/v1/txt2img', json=payload, verify=False, timeout=120)
@@ -100,13 +103,13 @@ def generate_images(model, prompt, negative_prompt, width, height, num_images, s
     images = r['images']
     logger.info(f"生成的图片数量: {len(images)}")  
 
-    
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     os.makedirs(output_dir, exist_ok=True)
     
     saved_files = []
     for i, img_data in enumerate(images):
-        update_status(f"处理图片 {i+1}/{num_images}")
+        progress = int((i + 1) / num_images * 100)
+        update_status(f"处理图片 {i+1}/{num_images}", progress)
         
         if not isinstance(img_data, str) or not img_data.strip():
             logger.warning(f"图片 {i+1} 的数据无效")
@@ -132,7 +135,7 @@ def generate_images(model, prompt, negative_prompt, width, height, num_images, s
         except Exception as e:
             logger.error(f"处理图片 {i+1} 时出错: {str(e)}")
     
-    update_status("所有图片生成完成")
+    update_status("所有图片生成完成", 100)
     return seeds, saved_files
 
 @app.route('/generate', methods=['POST'])
@@ -172,10 +175,10 @@ def generate():
 @app.route('/status', methods=['GET'])
 def get_status():
     logger.info("收到状态请求")
-    global current_status
+    global current_status, current_progress
     with status_lock:
-        logger.debug(f"当前状态: {current_status}")
-        return jsonify({"status": current_status})
+        logger.debug(f"当前状态: {current_status}, 进度: {current_progress}%")
+        return jsonify({"status": current_status, "progress": current_progress})
 
 @app.route('/images/<path:filename>')
 def serve_image(filename):
