@@ -3,44 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stable Diffusion WebUI 控制面板</title>
+    <title>Stable Diffusion</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             line-height: 1.6;
             margin: 0;
-            padding: 20px;
+            padding: 10px;
             background-color: #f4f4f4;
         }
         .container {
-            max-width: 900px;
+            max-width: 960px;
             margin: auto;
             background: white;
-            padding: 20px;
+            padding: 15px;
             border-radius: 5px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
         h1 {
             text-align: center;
             color: #333;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
         .form-row {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
         .form-group {
             display: flex;
             flex-direction: column;
         }
-        .form-group.large {
-            flex: 2;
-            margin-right: 15px;
+        .form-group.full {
+            flex: 1;
         }
         .form-group.medium {
             flex: 1;
-            margin-right: 15px;
+            margin-right: 10px;
         }
         .form-group.small {
             flex: 0 0 80px;
@@ -49,44 +48,42 @@
             margin-right: 0;
         }
         label {
-            margin-bottom: 5px;
+            margin-bottom: 3px;
             font-weight: bold;
         }
-        input[type="text"], input[type="number"], select {
+        input[type="text"], input[type="number"], select, textarea {
             width: 100%;
-            padding: 8px;
+            padding: 6px;
             border: 1px solid #ddd;
             border-radius: 4px;
             box-sizing: border-box;
         }
+        textarea {
+            min-height: 60px;
+            resize: vertical;
+        }
         .button-group {
             display: flex;
             justify-content: space-between;
-            margin-top: 20px;
+            margin-top: 15px;
         }
         button {
             flex: 1;
-            padding: 10px;
+            padding: 8px;
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
             font-size: 16px;
             transition: background-color 0.3s;
-        }
-        button:first-child {
             background: #4a90e2;
-            margin-right: 10px;
-        }
-        button:last-child {
-            background: #5cb85c;
         }
         button:hover {
             opacity: 0.9;
         }
-        #status, #result {
-            margin-top: 20px;
-            padding: 10px;
+        #statusResult {
+            margin-top: 15px;
+            padding: 8px;
             background: #e9e9e9;
             border-radius: 4px;
         }
@@ -94,62 +91,57 @@
             display: flex;
             flex-wrap: wrap;
             justify-content: space-around;
-            margin-top: 20px;
+            margin-top: 15px;
         }
         #imageContainer img {
-            max-width: 45%;
-            margin-bottom: 15px;
+            max-width: 100%;
+            margin-bottom: 10px;
             border-radius: 4px;
             box-shadow: 0 0 5px rgba(0,0,0,0.2);
-        }
-        #progressBar {
-            width: 100%;
-            background-color: #ddd;
-            margin-top: 10px;
-        }
-        #progressBar > div {
-            height: 20px;
-            background-color: #4CAF50;
-            text-align: center;
-            line-height: 20px;
-            color: white;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Stable Diffusion WebUI 控制面板</h1>
-        
+        <h1>Stable Diffusion</h1>
+
         <div class="form-row">
-            <div class="form-group large">
+            <div class="form-group full">
                 <label for="model">模型</label>
                 <select id="model">
                     <option value="flux1-dev-bnb-nf4-v2.safetensors">flux1-dev-bnb-nf4-v2.safetensors</option>
                     <option value="realisticVisionV51_v51VAE.safetensors">realisticVisionV51_v51VAE.safetensors</option>
-                    <!-- 添加更多模型选项 -->
                 </select>
             </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group full">
+                <label for="prompt">正面提示词</label>
+                <textarea id="prompt" placeholder="输入正面提示词" rows="2"></textarea>
+            </div>
+        </div>
+
+        <div class="form-row">
             <div class="form-group medium">
                 <label for="width">宽度</label>
                 <input type="number" id="width" value="512" min="64" max="2048" step="64">
             </div>
             <div class="form-group medium">
-                <label for="height">高度</label>
-                <input type="number" id="height" value="512" min="64" max="2048" step="64">
-            </div>
-        </div>
-        
-        <div class="form-row">
-            <div class="form-group large">
-                <label for="prompt">提示词</label>
-                <input type="text" id="prompt" placeholder="输入提示词">
+                <label for="ratio">比例</label>
+                <select id="ratio" onchange="updateHeight()">
+                    <option value="1:1">1:1</option>
+                    <option value="4:3">4:3</option>
+                    <option value="16:9">16:9</option>
+                    <option value="3:4">3:4</option>
+                    <option value="9:16">9:16</option>
+                </select>
             </div>
             <div class="form-group small">
                 <label for="numImages">数量</label>
                 <select id="numImages">
                     <option value="1">1</option>
                     <option value="2">2</option>
-                    <option value="4">4</option>
                 </select>
             </div>
             <div class="form-group small">
@@ -157,49 +149,50 @@
                 <input type="number" id="seed" value="-1" min="-1">
             </div>
         </div>
-        
-        <div class="form-row">
-            <div class="form-group large">
-                <label for="negativePrompt">负面提示词</label>
-                <input type="text" id="negativePrompt" placeholder="输入负面提示词">
-            </div>
-        </div>
-        
+
         <div class="button-group">
             <button id="generateBtn" onclick="generateImages()">生成图片</button>
         </div>
-        
-        <div id="status">状态：空闲</div>
-        <div id="progressBar">
-            <div id="progressBarFill" style="width: 0%">0%</div>
-        </div>
-        <div id="result"></div>
+
+        <div id="statusResult">状态：空闲</div>
         <div id="imageContainer"></div>
     </div>
 
     <script>
         const apiUrl = '';  // 替换为您的服务器地址
+        const defaultNegativePrompt = "NSFW";  // 默认负面提示词
 
-        let statusInterval;
         let isGenerating = false;
+
+        function updateHeight() {
+            const width = parseInt(document.getElementById('width').value);
+            const ratio = document.getElementById('ratio').value;
+            const [w, h] = ratio.split(':').map(Number);
+            const height = Math.round(width * h / w);
+        }
 
         async function generateImages() {
             if (isGenerating) return;
             isGenerating = true;
             document.getElementById('generateBtn').disabled = true;
 
+            const width = parseInt(document.getElementById('width').value);
+            const ratio = document.getElementById('ratio').value;
+            const [w, h] = ratio.split(':').map(Number);
+            const height = Math.round(width * h / w);
+
             const params = {
                 model: document.getElementById('model').value,
                 prompt: document.getElementById('prompt').value,
-                negative_prompt: document.getElementById('negativePrompt').value,
-                width: parseInt(document.getElementById('width').value),
-                height: parseInt(document.getElementById('height').value),
+                negative_prompt: defaultNegativePrompt,
+                width: width,
+                height: height,
                 num_images: parseInt(document.getElementById('numImages').value),
                 seed: parseInt(document.getElementById('seed').value),
             };
 
             try {
-                startStatusCheck();
+                document.getElementById('statusResult').textContent = '状态：生成中...';
                 const response = await fetch(`${apiUrl}/generate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -207,61 +200,29 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    document.getElementById('result').textContent = `生成成功！种子：${data.seeds.join(', ')}`;
+                    document.getElementById('statusResult').textContent = `生成成功！种子：${data.seeds.join(', ')}`;
                     const imageContainer = document.getElementById('imageContainer');
                     imageContainer.innerHTML = '';
                     data.image_urls.forEach(url => {
                         const img = document.createElement('img');
                         img.src = apiUrl + url;
+                        img.style.width = data.image_urls.length === 1 ? '100%' : '48%';
                         imageContainer.appendChild(img);
                     });
                 } else {
-                    document.getElementById('result').textContent = `生成失败：${data.error}`;
+                    document.getElementById('statusResult').textContent = `生成失败：${data.error}`;
                 }
             } catch (error) {
                 console.error('Error:', error);
-                document.getElementById('result').textContent = '生成失败：网络错误';
+                document.getElementById('statusResult').textContent = '生成失败：网络错误';
             } finally {
                 isGenerating = false;
                 document.getElementById('generateBtn').disabled = false;
-                stopStatusCheck();
             }
         }
 
-        function updateStatusDisplay(status, progress) {
-            document.getElementById('status').textContent = `状态：${status}`;
-            if (progress !== undefined) {
-                const progressBar = document.getElementById('progressBarFill');
-                progressBar.style.width = `${progress}%`;
-                progressBar.textContent = `${progress}%`;
-            }
-        }
-
-        async function updateStatus() {
-            try {
-                const response = await fetch(`${apiUrl}/status`);
-                const data = await response.json();
-                updateStatusDisplay(data.status, data.progress);
-                if (data.status === "所有图片生成完成" || data.status === "空闲") {
-                    stopStatusCheck();
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                updateStatusDisplay('状态更新失败');
-            }
-        }
-
-        function startStatusCheck() {
-            stopStatusCheck(); // 确保之前的 interval 被清除
-            statusInterval = setInterval(updateStatus, 1000); // 每秒更新一次
-        }
-
-        function stopStatusCheck() {
-            clearInterval(statusInterval);
-        }
-
-        // 初始状态检查
-        updateStatus();
+        // 初始化时调用一次，确保高度正确设置
+        updateHeight();
     </script>
 </body>
 </html>
