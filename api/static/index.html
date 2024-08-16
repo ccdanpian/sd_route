@@ -5,7 +5,115 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stable Diffusion WebUI 控制面板</title>
     <style>
-        /* 保持原有的样式不变 */
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .form-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .form-group.large {
+            flex: 2;
+            margin-right: 15px;
+        }
+        .form-group.medium {
+            flex: 1;
+            margin-right: 15px;
+        }
+        .form-group.small {
+            flex: 0 0 80px;
+        }
+        .form-group:last-child {
+            margin-right: 0;
+        }
+        label {
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="number"], select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .button-group {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        button {
+            flex: 1;
+            padding: 10px;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:first-child {
+            background: #4a90e2;
+            margin-right: 10px;
+        }
+        button:last-child {
+            background: #5cb85c;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        #status, #result {
+            margin-top: 20px;
+            padding: 10px;
+            background: #e9e9e9;
+            border-radius: 4px;
+        }
+        #imageContainer {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            margin-top: 20px;
+        }
+        #imageContainer img {
+            max-width: 45%;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.2);
+        }
+        #progressBar {
+            width: 100%;
+            background-color: #ddd;
+            margin-top: 10px;
+        }
+        #progressBar > div {
+            height: 20px;
+            background-color: #4CAF50;
+            text-align: center;
+            line-height: 20px;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -62,6 +170,9 @@
         </div>
         
         <div id="status">状态：空闲</div>
+        <div id="progressBar">
+            <div id="progressBarFill" style="width: 0%">0%</div>
+        </div>
         <div id="result"></div>
         <div id="imageContainer"></div>
     </div>
@@ -89,7 +200,7 @@
 
             try {
                 startStatusCheck();
-                const response = await fetch(`/generate`, {
+                const response = await fetch(`${apiUrl}/generate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(params),
@@ -117,15 +228,20 @@
             }
         }
 
-        function updateStatusDisplay(status) {
+        function updateStatusDisplay(status, progress) {
             document.getElementById('status').textContent = `状态：${status}`;
+            if (progress !== undefined) {
+                const progressBar = document.getElementById('progressBarFill');
+                progressBar.style.width = `${progress}%`;
+                progressBar.textContent = `${progress}%`;
+            }
         }
 
         async function updateStatus() {
             try {
                 const response = await fetch(`${apiUrl}/status`);
                 const data = await response.json();
-                updateStatusDisplay(data.status);
+                updateStatusDisplay(data.status, data.progress);
                 if (data.status === "所有图片生成完成" || data.status === "空闲") {
                     stopStatusCheck();
                 }
@@ -137,7 +253,7 @@
 
         function startStatusCheck() {
             stopStatusCheck(); // 确保之前的 interval 被清除
-            statusInterval = setInterval(updateStatus, 3000); // 每3秒更新一次
+            statusInterval = setInterval(updateStatus, 1000); // 每秒更新一次
         }
 
         function stopStatusCheck() {
