@@ -1,127 +1,190 @@
+from flask import Flask, request, jsonify, send_from_directory
 import requests
-import json
-import base64
 import io
+import base64
 from PIL import Image
-import urllib3
-import random
-import numpy as np
-import matplotlib.pyplot as plt
 import os
+import random
+from datetime import datetime
+import threading
+import time
+import json
+import numpy as np
+import logging
+import urllib3
 
 # 禁用SSL警告（仅用于测试环境）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-url = "https://sd.italkwithai.online:21443/sdapi/v1/txt2img"
+# 设置日志
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-# 使用一个固定的正整数作为 seed
-fixed_seed = random.randint(1, 2147483647)  # 使用随机生成的正整数
+app = Flask(__name__)
 
-payload = {
-    "prompt": "a tiny cat",
-    "negative_prompt": "nsfw",
-    "steps": 30,
-    "width": 512,
-    "height": 512,
-    "sampler_name": "Euler",
-    "scheduler": "Simple",
-    "cfg_scale": 1,
-    "seed": -1,  # 使用固定的 seed
-    "batch_size": 1,
-    "model": "flux1-dev-bnb-nf4-v2.safetensors",
-    "txt2img enable_hr": False
+# 从环境变量获取配置
+SD_URL = os.getenv('SD_URL', 'https://sd.italkwithai.online:21443/')
+output_dir = os.getenv('SD_OUTPUT_DIR', 'output')
 
-}
+logger.info(f"SD_URL: {SD_URL}")
+logger.info(f"Output directory: {output_dir}")
 
-print(f"使用的 seed 值: {fixed_seed}")
+# 全局变量来存储当前状态和进度
+current_status = "空闲"
+current_progress = 0
+status_lock = threading.Lock()
 
-try:
-    response = requests.post(url, json=payload, verify=False, timeout=120)  # 添加超时设置
-    response.raise_for_status()  # 如果响应状态码不是 200，将引发异常
-except requests.exceptions.RequestException as e:
-    print(f"请求失败: {e}")
-    exit()
+@app.route('/')
+def index():
+    logger.info("访问主页")
+    return send_from_directory('static', 'index.html')
 
-try:
-    response_json = response.json()
-except json.JSONDecodeError:
-    print("无法解析JSON响应")
-    print("原始响应内容:")
-    print(response.text)
-    exit()
+def update_status(message, progress=None):
+    global current_status, current_progress
+    with status_lock:
+        current_status = message
+        if progress is not None:
+            current_progress = progress
+    logger.info(f"状态更新: {message}, 进度: {progress}%")
 
-# 检查响应是否包含预期的键
-if 'images' not in response_json:
-    print("响应中没有 'images' 键")
-    print("完整的响应内容:")
-    print(json.dumps(response_json, indent=2))
-    exit()
-
-# 获取图片数据
-for i, img_data in enumerate(response_json['images']):
-    print(f"\n处理图片 {i}:")
+def generate_images(model, prompt, negative_prompt, width, height, num_images, seed):
+    if seed == -1:
+        seed = random.randint(0, 2**32 - 1)
     
-    # 检查 img_data 是否为有效的 base64 字符串
-    if not isinstance(img_data, str) or not img_data.strip():
-        print(f"图片 {i} 的数据无效")
-        continue
+    payload = {
+        "prompt": prompt,
+        "negative_prompt": negative_prompt,
+        "steps": 30,
+        "sampler_name": "Euler",
+        "scheduler": "Simple",
+        "cfg_scale": 1,
+        "width": width,
+        "height": height,
+        "seed": seed,
+        "batch_size": num_images,
+        "model": model,
+    }
 
-    # 检查 base64 数据的前缀
-    if img_data.startswith("data:image/"):
-        print("Base64 数据包含正确的 MIME 类型前缀")
-    else:
-        print("警告：Base64 数据没有预期的 MIME 类型前缀")
-
-    # 保存原始的 base64 数据
-    with open(f"base64_data_{i}.txt", "w") as f:
-        f.write(img_data)
-    print(f"原始 base64 数据已保存为 base64_data_{i}.txt")
-
-    # 尝试解码 base64 数据
+    logger.debug(f"Payload: {json.dumps(payload, indent=2)}")
+    
+    update_status(f"正在使用模型 {model} 生成图片...", 0)
     try:
-        image_data = base64.b64decode(img_data)
-    except base64.binascii.Error:
-        print(f"图片 {i} 的 base64 数据无效")
-        continue
+        logger.info(f"发送请求到 {SD_URL}/sdapi/v1/txt2img")
+        response = requests.post(url=f'{SD_URL}/sdapi/v1/txt2img', json=payload, verify=False, timeout=120)
+        response.raise_for_status()
+        logger.debug(f"Response status code: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"生成图片请求失败: {str(e)}")
+        raise Exception(f"生成图片请求失败: {str(e)}")
 
-    # 保存原始图片数据
-    with open(f"raw_image_{i}.png", "wb") as f:
-        f.write(image_data)
-    print(f"原始图片数据已保存为 raw_image_{i}.png")
-
-    # 尝试用 PIL 打开和保存
     try:
-        image = Image.open(io.BytesIO(image_data))
-        image.save(f"pil_image_{i}.png")
-        print(f"PIL 处理后的图片已保存为 pil_image_{i}.png")
-        print(f"图片大小: {image.size}")
-        print(f"图片模式: {image.mode}")
+        r = response.json()
+        logger.debug(f"Response JSON keys: {r.keys()}")
+        logger.debug(f"Response 'info' type: {type(r.get('info'))}")
+        logger.debug(f"Response 'info' content: {r.get('info')}")
+    except json.JSONDecodeError:
+        logger.error("无法解析JSON响应")
+        raise Exception("无法解析JSON响应")
 
-        if image.mode == "RGB":
-            img_array = np.array(image)
-            print(f"图像形状: {img_array.shape}")
-            print(f"数据类型: {img_array.dtype}")
-            print(f"最小值: {img_array.min()}")
-            print(f"最大值: {img_array.max()}")
-            print(f"平均值: {img_array.mean():.2f}")
-        else:
-            print(f"图像模式不是 RGB，而是 {image.mode}")
+    if 'images' not in r:
+        logger.error("响应中没有 'images' 键")
+        raise Exception("响应中没有 'images' 键")
 
-        # 使用 matplotlib 显示和保存图像
-        plt.figure(figsize=(10, 10))
-        plt.imshow(image)
-        plt.axis('off')
-        plt.title("Generated Image")
-        plt.savefig(f"matplotlib_image_{i}.png")
-        print(f"Matplotlib 图像已保存为 matplotlib_image_{i}.png")
+    # 处理 'info' 字段
+    info = r.get('info', '{}')
+    if isinstance(info, str):
+        try:
+            info = json.loads(info)
+        except json.JSONDecodeError:
+            logger.error("无法解析 'info' 字符串为 JSON")
+            info = {}
 
+    seeds = info.get('all_seeds', [seed] * num_images)
+    images = r['images']
+    logger.info(f"生成的图片数量: {len(images)}")  
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    os.makedirs(output_dir, exist_ok=True)
+    
+    saved_files = []
+    for i, img_data in enumerate(images):
+        progress = int((i + 1) / num_images * 100)
+        update_status(f"处理图片 {i+1}/{num_images}", progress)
+        
+        if not isinstance(img_data, str) or not img_data.strip():
+            logger.warning(f"图片 {i+1} 的数据无效")
+            continue
+
+        try:
+            image_data = base64.b64decode(img_data)
+            image = Image.open(io.BytesIO(image_data))
+            file_name = f"{timestamp}_{model}_{seeds[i]}.png"
+            file_path = os.path.join(output_dir, file_name)
+            image.save(file_path)
+            saved_files.append(file_name)
+
+            logger.info(f"图片 {i+1} 信息 - 大小: {image.size}, 模式: {image.mode}")
+
+            if image.mode == "RGB":
+                img_array = np.array(image)
+                logger.debug(f"图片 {i+1} 统计 - 形状: {img_array.shape}, 最小值: {img_array.min()}, 最大值: {img_array.max()}, 平均值: {img_array.mean():.2f}")
+
+            logger.info(f"已保存图片 {i+1}/{num_images}")
+            logger.debug(f"文件大小: {os.path.getsize(file_path)} bytes")
+
+        except Exception as e:
+            logger.error(f"处理图片 {i+1} 时出错: {str(e)}")
+    
+    update_status("所有图片生成完成", 100)
+    return seeds, saved_files
+
+@app.route('/generate', methods=['POST'])
+def generate():
+    logger.info("收到生成图片请求")
+    data = request.json
+    logger.debug(f"请求数据: {json.dumps(data, indent=2)}")
+    
+    model = data.get('model', 'v1-5-pruned-emaonly.safetensors')
+    prompt = data.get('prompt', '')
+    negative_prompt = data.get('negative_prompt', '')
+    width = data.get('width', 512)
+    height = data.get('height', 512)
+    num_images = data.get('num_images', 1)
+    seed = data.get('seed', -1)
+
+    try:
+        seeds, file_names = generate_images(model, prompt, negative_prompt, width, height, num_images, seed)
+        
+        image_urls = [f"/images/{file_name}" for file_name in file_names]
+        
+        response = {
+            "success": True,
+            "seeds": seeds,
+            "image_urls": image_urls
+        }
+        logger.info("图片生成成功")
+        logger.debug(f"响应数据: {json.dumps(response, indent=2)}")
+        return jsonify(response)
     except Exception as e:
-        print(f"处理图片时出错: {str(e)}")
+        logger.error(f"图片生成失败: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
-    # 打印文件大小信息
-    print(f"raw_image_{i}.png 大小: {os.path.getsize(f'raw_image_{i}.png')} bytes")
-    print(f"pil_image_{i}.png 大小: {os.path.getsize(f'pil_image_{i}.png')} bytes")
-    print(f"matplotlib_image_{i}.png 大小: {os.path.getsize(f'matplotlib_image_{i}.png')} bytes")
+@app.route('/status', methods=['GET'])
+def get_status():
+    logger.info("收到状态请求")
+    global current_status, current_progress
+    with status_lock:
+        logger.debug(f"当前状态: {current_status}, 进度: {current_progress}%")
+        return jsonify({"status": current_status, "progress": current_progress})
 
-print("\nAPI响应内容:")
-print(json.dumps(response_json, indent=2))
+@app.route('/images/<path:filename>')
+def serve_image(filename):
+    logger.info(f"请求图片: {filename}")
+    return send_from_directory(output_dir, filename)
+
+if __name__ == '__main__':
+    logger.info("启动服务器")
+    app.run(host='0.0.0.0', port=25000, threaded=True)
