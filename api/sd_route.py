@@ -19,6 +19,10 @@ output_dir = os.getenv('SD_OUTPUT_DIR', 'output')
 current_status = "空闲"
 status_lock = threading.Lock()
 
+@app.route('/')
+def index():
+    return send_from_directory('static', 'index.html')
+
 def update_status(message):
     global current_status
     with status_lock:
