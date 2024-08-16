@@ -12,6 +12,9 @@ import json
 import numpy as np
 import logging
 
+# 禁用SSL警告（仅用于测试环境）
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 # 设置日志
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
