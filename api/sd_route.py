@@ -52,6 +52,7 @@ def generate_images(model, prompt, negative_prompt, width, height, num_images, s
         "negative_prompt": negative_prompt,
         "steps": 30,
         "sampler_name": "Euler",
+        "scheduler": "Simple",
         "cfg_scale": 1,
         "width": width,
         "height": height,
