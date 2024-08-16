@@ -12,7 +12,7 @@ import time
 app = Flask(__name__)
 
 # 从环境变量获取配置
-SD_URL = os.getenv('SD_URL', 'http://127.0.0.1:7860')
+SD_URL = os.getenv('SD_URL', 'https://sd.italkwithai.online:21443/')
 output_dir = os.getenv('SD_OUTPUT_DIR', 'output')
 
 # 全局变量来存储当前状态
@@ -41,8 +41,8 @@ def generate_images(model, prompt, negative_prompt, width, height, num_images, s
         "prompt": prompt,
         "negative_prompt": negative_prompt,
         "steps": 30,
-        "sampler_index": "Euler a",
-        "cfg_scale": 7,
+        "sampler_index": "Euler",
+        "cfg_scale": 1,
         "width": width,
         "height": height,
         "seed": seed,
@@ -126,4 +126,4 @@ def serve_image(filename):
     return send_from_directory(output_dir, filename)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, threaded=True)
+    app.run(host='0.0.0.0', port=25000, threaded=True)
