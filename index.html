@@ -164,7 +164,71 @@
     </div>
 
     <script>
-        // JavaScript 代码保持不变
+        const apiUrl = 'http://127.0.0.1:25000';  // 替换为您的服务器地址
+
+        async function switchModel() {
+            const model = document.getElementById('model').value;
+            try {
+                const response = await fetch(`${apiUrl}/switch_model`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: model }),
+                });
+                const data = await response.json();
+                document.getElementById('status').textContent = `状态：${data.message}`;
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('status').textContent = `状态：切换模型失败`;
+            }
+        }
+
+        async function generateImages() {
+            const params = {
+                model: document.getElementById('model').value,
+                prompt: document.getElementById('prompt').value,
+                negative_prompt: document.getElementById('negativePrompt').value,
+                width: parseInt(document.getElementById('width').value),
+                height: parseInt(document.getElementById('height').value),
+                num_images: parseInt(document.getElementById('numImages').value),
+                seed: parseInt(document.getElementById('seed').value),
+            };
+
+            try {
+                const response = await fetch(`${apiUrl}/generate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(params),
+                });
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('result').textContent = `生成成功！种子：${data.seeds.join(', ')}`;
+                    const imageContainer = document.getElementById('imageContainer');
+                    imageContainer.innerHTML = '';
+                    data.image_urls.forEach(url => {
+                        const img = document.createElement('img');
+                        img.src = apiUrl + url;
+                        imageContainer.appendChild(img);
+                    });
+                } else {
+                    document.getElementById('result').textContent = `生成失败：${data.error}`;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result').textContent = '生成失败：网络错误';
+            }
+        }
+
+        async function updateStatus() {
+            try {
+                const response = await fetch(`${apiUrl}/status`);
+                const data = await response.json();
+                document.getElementById('status').textContent = `状态：${data.status}`;
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        setInterval(updateStatus, 1000);  // 每秒更新一次状态
     </script>
 </body>
 </html>
