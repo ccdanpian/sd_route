@@ -72,6 +72,8 @@ def generate_images(model, prompt, negative_prompt, width, height, num_images, s
     try:
         r = response.json()
         logger.debug(f"Response JSON keys: {r.keys()}")
+        logger.debug(f"Response 'info' type: {type(r.get('info'))}")
+        logger.debug(f"Response 'info' content: {r.get('info')}")
     except json.JSONDecodeError:
         logger.error("无法解析JSON响应")
         raise Exception("无法解析JSON响应")
@@ -80,9 +82,19 @@ def generate_images(model, prompt, negative_prompt, width, height, num_images, s
         logger.error("响应中没有 'images' 键")
         raise Exception("响应中没有 'images' 键")
 
-    seeds = r.get('info', {}).get('all_seeds', [seed] * num_images)
+    # 处理 'info' 字段
+    info = r.get('info', '{}')
+    if isinstance(info, str):
+        try:
+            info = json.loads(info)
+        except json.JSONDecodeError:
+            logger.error("无法解析 'info' 字符串为 JSON")
+            info = {}
+
+    seeds = info.get('all_seeds', [seed] * num_images)
     images = r['images']
-    logger.info(f"生成的图片数量: {len(images)}")
+    logger.info(f"生成的图片数量: {len(images)}")  
+
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     os.makedirs(output_dir, exist_ok=True)
