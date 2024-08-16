@@ -11,6 +11,7 @@ import time
 import json
 import numpy as np
 import logging
+import urllib3
 
 # 禁用SSL警告（仅用于测试环境）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
