@@ -166,69 +166,100 @@
     <script>
         const apiUrl = '';  // 替换为您的服务器地址
 
-        async function switchModel() {
-            const model = document.getElementById('model').value;
-            try {
-                const response = await fetch(`${apiUrl}/switch_model`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ model: model }),
-                });
-                const data = await response.json();
-                document.getElementById('status').textContent = `状态：${data.message}`;
-            } catch (error) {
-                console.error('Error:', error);
-                document.getElementById('status').textContent = `状态：切换模型失败`;
-            }
+let statusInterval;
+let isGenerating = false;
+
+async function switchModel() {
+    const model = document.getElementById('model').value;
+    try {
+        const response = await fetch(`${apiUrl}/switch_model`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: model }),
+        });
+        const data = await response.json();
+        updateStatusDisplay(data.message);
+    } catch (error) {
+        console.error('Error:', error);
+        updateStatusDisplay('切换模型失败');
+    }
+}
+
+async function generateImages() {
+    if (isGenerating) return;
+    isGenerating = true;
+    document.getElementById('generateBtn').disabled = true;
+
+    const params = {
+        model: document.getElementById('model').value,
+        prompt: document.getElementById('prompt').value,
+        negative_prompt: document.getElementById('negativePrompt').value,
+        width: parseInt(document.getElementById('width').value),
+        height: parseInt(document.getElementById('height').value),
+        num_images: parseInt(document.getElementById('numImages').value),
+        seed: parseInt(document.getElementById('seed').value),
+    };
+
+    try {
+        startStatusCheck();
+        const response = await fetch(`/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        });
+        const data = await response.json();
+        if (data.success) {
+            document.getElementById('result').textContent = `生成成功！种子：${data.seeds.join(', ')}`;
+            const imageContainer = document.getElementById('imageContainer');
+            imageContainer.innerHTML = '';
+            data.image_urls.forEach(url => {
+                const img = document.createElement('img');
+                img.src = apiUrl + url;
+                imageContainer.appendChild(img);
+            });
+        } else {
+            document.getElementById('result').textContent = `生成失败：${data.error}`;
         }
+    } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('result').textContent = '生成失败：网络错误';
+    } finally {
+        isGenerating = false;
+        document.getElementById('generateBtn').disabled = false;
+        stopStatusCheck();
+    }
+}
 
-        async function generateImages() {
-            const params = {
-                model: document.getElementById('model').value,
-                prompt: document.getElementById('prompt').value,
-                negative_prompt: document.getElementById('negativePrompt').value,
-                width: parseInt(document.getElementById('width').value),
-                height: parseInt(document.getElementById('height').value),
-                num_images: parseInt(document.getElementById('numImages').value),
-                seed: parseInt(document.getElementById('seed').value),
-            };
+function updateStatusDisplay(status) {
+    document.getElementById('status').textContent = `状态：${status}`;
+}
 
-            try {
-                const response = await fetch(`/generate`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(params),
-                });
-                const data = await response.json();
-                if (data.success) {
-                    document.getElementById('result').textContent = `生成成功！种子：${data.seeds.join(', ')}`;
-                    const imageContainer = document.getElementById('imageContainer');
-                    imageContainer.innerHTML = '';
-                    data.image_urls.forEach(url => {
-                        const img = document.createElement('img');
-                        img.src = apiUrl + url;
-                        imageContainer.appendChild(img);
-                    });
-                } else {
-                    document.getElementById('result').textContent = `生成失败：${data.error}`;
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                document.getElementById('result').textContent = '生成失败：网络错误';
-            }
+async function updateStatus() {
+    try {
+        const response = await fetch(`${apiUrl}/status`);
+        const data = await response.json();
+        updateStatusDisplay(data.status);
+        if (data.status === "所有图片生成完成" || data.status === "空闲") {
+            stopStatusCheck();
         }
+    } catch (error) {
+        console.error('Error:', error);
+        updateStatusDisplay('状态更新失败');
+    }
+}
 
-        async function updateStatus() {
-            try {
-                const response = await fetch(`${apiUrl}/status`);
-                const data = await response.json();
-                document.getElementById('status').textContent = `状态：${data.status}`;
-            } catch (error) {
-                console.error('Error:', error);
-            }
-        }
+function startStatusCheck() {
+    stopStatusCheck(); // 确保之前的 interval 被清除
+    statusInterval = setInterval(updateStatus, 3000); // 每3秒更新一次
+}
 
-        setInterval(updateStatus, 1000);  // 每秒更新一次状态
+function stopStatusCheck() {
+    clearInterval(statusInterval);
+}
+
+// 初始状态检查
+updateStatus();
+
     </script>
 </body>
 </html>
