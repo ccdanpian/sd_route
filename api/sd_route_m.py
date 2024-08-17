@@ -73,18 +73,19 @@ def process_task(task):
     update_task_status(task_id, "处理中", 0)
     try:
         seeds, file_names = generate_images(**task)
-        update_task_status(task_id, "完成", 100, seeds=seeds, file_names=file_names)
+        update_task_status(task_id, "完成", 100, seeds=seeds, file_names=file_names, translated_prompt=task['prompt'])
     except Exception as e:
         logger.error(f"处理任务 {task_id} 时出错: {str(e)}")
         update_task_status(task_id, f"失败: {str(e)}", 100)
 
-def update_task_status(task_id, status, progress, seeds=None, file_names=None):
+def update_task_status(task_id, status, progress, seeds=None, file_names=None, translated_prompt=None):
     with task_lock:
         task_status[task_id] = {
             "status": status,
             "progress": progress,
             "seeds": seeds,
-            "file_names": file_names
+            "file_names": file_names,
+            "translated_prompt": translated_prompt
         }
     logger.info(f"任务 {task_id} 状态更新: {status}, 进度: {progress}%")
 
@@ -194,6 +195,29 @@ def check_prompt_with_chatgpt(prompt):
         logger.exception("详细错误信息:")
         return False  # 如果API调用失败，我们假设内容是安全的
 
+def translate_to_english(prompt):
+    try:
+        logger.info(f"正在将提示词翻译为英语: {prompt}")
+        response = client.chat.completions.create(
+            model="gpt-4o-mini-2024-07-18",
+            messages=[
+                {"role": "system", "content": "你是一个翻译助手。请将给定的文本翻译成英语。如果文本已经是英语，请原样返回。只返回翻译结果，不要添加任何解释、引号或额外的文字。"},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        
+        if not response.choices:
+            logger.error("ChatGPT API 响应中没有选项")
+            return prompt
+
+        translated_prompt = response.choices[0].message.content.strip()
+        logger.info(f"翻译结果: {translated_prompt}")
+        return translated_prompt
+    except Exception as e:
+        logger.error(f"ChatGPT API调用错误: {str(e)}")
+        logger.exception("详细错误信息:")
+        return prompt  # 如果API调用失败，返回原始prompt
+
 @app.route('/')
 def index():
     return send_from_directory('static', 'index_m.html')
@@ -214,11 +238,14 @@ def generate():
     if contains_inappropriate_content:
         return jsonify({"error": "提示词可能包含不适当的内容。请修改后重试。"}), 400
 
+    # 翻译提示词为英语
+    translated_prompt = translate_to_english(prompt)
+
     task_id = str(uuid4())
     task = {
         'task_id': task_id,
         'model': data.get('model', 'v1-5-pruned-emaonly.safetensors'),
-        'prompt': prompt,
+        'prompt': translated_prompt,  # 使用翻译后的提示词
         'negative_prompt': data.get('negative_prompt', ''),
         'width': data.get('width', 512),
         'height': data.get('height', 512),
@@ -229,7 +256,7 @@ def generate():
     try:
         task_queue.put_nowait(task)
         task_status[task_id] = {"status": "排队中", "progress": 0}
-        return jsonify({"task_id": task_id})
+        return jsonify({"task_id": task_id, "translated_prompt": translated_prompt})
     except Full:
         return jsonify({"error": "队列已满，请稍后再试"}), 429
 
