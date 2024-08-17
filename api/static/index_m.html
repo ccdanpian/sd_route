@@ -132,7 +132,7 @@
         <div class="form-row">
             <div class="form-group quarter">
                 <label for="width">宽度</label>
-                <select id="width" onchange="updateHeight()">
+                <select id="width">
                     <option value="512">512</option>
                     <option value="800">800</option>
                     <option value="1024">1024</option>
@@ -140,7 +140,7 @@
             </div>
             <div class="form-group quarter">
                 <label for="ratio">比例</label>
-                <select id="ratio" onchange="updateHeight()">
+                <select id="ratio">
                     <option value="1:1">1:1</option>
                     <option value="4:3">4:3</option>
                     <option value="16:9">16:9</option>
@@ -175,10 +175,6 @@
         let taskQueue = [];
         let statusCheckInterval = null;
 
-        function updateHeight() {
-            // 在这个版本中，我们不需要更新高度，因为宽度是固定选项
-        }
-
         async function generateImages() {
             const generateBtn = document.getElementById('generateBtn');
             generateBtn.disabled = true;
@@ -212,6 +208,10 @@
                     return;
                 }
 
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
                 const data = await response.json();
                 if (data.task_id) {
                     addToQueue(data.task_id);
@@ -220,7 +220,7 @@
                 }
             } catch (error) {
                 console.error('Error:', error);
-                updateStatus("生成失败：网络错误");
+                updateStatus("生成失败：" + error.message);
             } finally {
                 generateBtn.disabled = false;
             }
