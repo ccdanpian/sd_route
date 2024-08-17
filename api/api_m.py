@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # 从环境变量获取配置
-SD_URL = os.getenv('SD_URL', 'https://sd.italkwithai.online:21443/')
+SD_URL = os.getenv('SD_URL', 'https://sd.italkwithai.online:21443')
 output_dir = os.getenv('SD_OUTPUT_DIR', 'output')
 
 logger.info(f"SD_URL: {SD_URL}")
