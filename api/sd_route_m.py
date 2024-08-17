@@ -12,7 +12,7 @@ import json
 import logging
 import urllib3
 from uuid import uuid4
-from queue import Queue
+from queue import Queue, Full
 
 # 禁用SSL警告（仅用于测试环境）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -31,7 +31,8 @@ logger.info(f"SD_URL: {SD_URL}")
 logger.info(f"Output directory: {output_dir}")
 
 # 任务队列和状态字典
-task_queue = Queue()
+MAX_QUEUE_SIZE = 3
+task_queue = Queue(maxsize=MAX_QUEUE_SIZE)
 task_status = {}
 current_task = None
 task_lock = threading.Lock()
@@ -176,10 +177,12 @@ def generate():
         'seed': data.get('seed', -1)
     }
 
-    task_queue.put(task)
-    task_status[task_id] = {"status": "排队中", "progress": 0}
-
-    return jsonify({"task_id": task_id})
+    try:
+        task_queue.put_nowait(task)
+        task_status[task_id] = {"status": "排队中", "progress": 0}
+        return jsonify({"task_id": task_id})
+    except Full:
+        return jsonify({"error": "队列已满，请稍后再试"}), 429
 
 @app.route('/status/<task_id>', methods=['GET'])
 def get_status(task_id):
