@@ -28,28 +28,28 @@
         .form-row {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
         }
         .form-group {
             display: flex;
             flex-direction: column;
         }
+        .form-group label {
+            margin-bottom: 5px;
+        }
         .form-group.full {
             flex: 1;
         }
-        .form-group.medium {
-            flex: 1;
+        .form-group.quarter {
+            flex: 0 0 23%;
+        }
+        .input-row {
+            display: flex;
+            align-items: center;
+        }
+        .input-row label {
+            width: 60px;
             margin-right: 10px;
-        }
-        .form-group.small {
-            flex: 0 0 100px;
-        }
-        .form-group:last-child {
-            margin-right: 0;
-        }
-        label {
-            margin-bottom: 3px;
-            font-weight: bold;
         }
         input[type="text"], input[type="number"], select, textarea {
             width: 100%;
@@ -90,12 +90,6 @@
         #taskContainer {
             margin-top: 15px;
         }
-        .taskStatus {
-            margin-bottom: 10px;
-            padding: 8px;
-            background: #f0f0f0;
-            border-radius: 4px;
-        }
         .imageContainer {
             display: flex;
             flex-wrap: wrap;
@@ -116,23 +110,27 @@
 
         <div class="form-row">
             <div class="form-group full">
-                <label for="model">模型</label>
-                <select id="model">
-                    <option value="flux1-dev-bnb-nf4-v2.safetensors">flux1-dev-bnb-nf4-v2.safetensors</option>
-                    <option value="realisticVisionV51_v51VAE.safetensors">realisticVisionV51_v51VAE.safetensors</option>
-                </select>
+                <div class="input-row">
+                    <label for="model">模型</label>
+                    <select id="model">
+                        <option value="flux1-dev-bnb-nf4-v2.safetensors">flux1-dev-bnb-nf4-v2.safetensors</option>
+                        <option value="realisticVisionV51_v51VAE.safetensors">realisticVisionV51_v51VAE.safetensors</option>
+                    </select>
+                </div>
             </div>
         </div>
 
         <div class="form-row">
             <div class="form-group full">
-                <label for="prompt">正面提示词</label>
-                <textarea id="prompt" placeholder="输入正面提示词" rows="2"></textarea>
+                <div class="input-row">
+                    <label for="prompt">提示词</label>
+                    <textarea id="prompt" placeholder="输入提示词" rows="2"></textarea>
+                </div>
             </div>
         </div>
 
         <div class="form-row">
-            <div class="form-group medium">
+            <div class="form-group quarter">
                 <label for="width">宽度</label>
                 <select id="width" onchange="updateHeight()">
                     <option value="512">512</option>
@@ -140,7 +138,7 @@
                     <option value="1024">1024</option>
                 </select>
             </div>
-            <div class="form-group medium">
+            <div class="form-group quarter">
                 <label for="ratio">比例</label>
                 <select id="ratio" onchange="updateHeight()">
                     <option value="1:1">1:1</option>
@@ -150,17 +148,14 @@
                     <option value="9:16">9:16</option>
                 </select>
             </div>
-            <div class="form-group small">
+            <div class="form-group quarter">
                 <label for="numImages">数量</label>
                 <select id="numImages">
                     <option value="1">1</option>
                     <option value="2">2</option>
                 </select>
             </div>
-        </div>
-
-        <div class="form-row">
-            <div class="form-group full">
+            <div class="form-group quarter">
                 <label for="seed">种子</label>
                 <input type="number" id="seed" value="-1" min="-1">
             </div>
