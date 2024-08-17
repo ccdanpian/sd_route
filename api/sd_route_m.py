@@ -12,7 +12,8 @@ import json
 import logging
 import urllib3
 from uuid import uuid4
-from queue import Queue, Full
+from queue import Queue
+import openai
 
 # 禁用SSL警告（仅用于测试环境）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -24,11 +25,22 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # 从环境变量获取配置
-SD_URL = os.getenv('SD_URL', 'https://sd.italkwithai.online:21443')
+SD_URL = os.getenv('SD_URL', 'https://sd.italkwithai.online:21443/')
 output_dir = os.getenv('SD_OUTPUT_DIR', 'output')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+OPENAI_API_BASE = os.getenv('OPENAI_API_BASE')
+
+if not OPENAI_API_KEY:
+    raise ValueError("请设置 OPENAI_API_KEY 环境变量")
+
+if OPENAI_API_BASE:
+    openai.api_base = OPENAI_API_BASE
+
+openai.api_key = OPENAI_API_KEY
 
 logger.info(f"SD_URL: {SD_URL}")
 logger.info(f"Output directory: {output_dir}")
+logger.info(f"OpenAI API Base: {OPENAI_API_BASE if OPENAI_API_BASE else 'Using default'}")
 
 # 任务队列和状态字典
 MAX_QUEUE_SIZE = 3
@@ -36,6 +48,21 @@ task_queue = Queue(maxsize=MAX_QUEUE_SIZE)
 task_status = {}
 current_task = None
 task_lock = threading.Lock()
+
+def check_prompt_with_chatgpt(prompt):
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "你是一个内容审核助手。请判断以下提示词是否包含色情或中国国家领导人信息。只回答'是'或'否'，不要解释。"},
+                {"role": "user", "content": f"提示词: {prompt}"}
+            ]
+        )
+        result = response.choices[0].message['content'].strip().lower()
+        return result == '是'
+    except Exception as e:
+        logger.error(f"ChatGPT API调用错误: {str(e)}")
+        return False  # 如果API调用失败，我们假设内容是安全的
 
 def worker():
     global current_task
@@ -157,7 +184,7 @@ def generate_images(task_id, model, prompt, negative_prompt, width, height, num_
 
 @app.route('/')
 def index():
-    return send_from_directory('static', 'index_m.html')
+    return send_from_directory('static', 'index.html')
 
 @app.route('/generate', methods=['POST'])
 def generate():
@@ -165,11 +192,19 @@ def generate():
     data = request.json
     logger.debug(f"请求数据: {json.dumps(data, indent=2)}")
 
+    prompt = data.get('prompt', '')
+    
+    # 使用ChatGPT检查提示词
+    contains_inappropriate_content = check_prompt_with_chatgpt(prompt)
+
+    if contains_inappropriate_content:
+        return jsonify({"warning": "提示词可能包含不适当的内容。请修改后重试。"}), 400
+
     task_id = str(uuid4())
     task = {
         'task_id': task_id,
         'model': data.get('model', 'v1-5-pruned-emaonly.safetensors'),
-        'prompt': data.get('prompt', ''),
+        'prompt': prompt,
         'negative_prompt': data.get('negative_prompt', ''),
         'width': data.get('width', 512),
         'height': data.get('height', 512),
@@ -181,7 +216,7 @@ def generate():
         task_queue.put_nowait(task)
         task_status[task_id] = {"status": "排队中", "progress": 0}
         return jsonify({"task_id": task_id})
-    except Full:
+    except Queue.Full:
         return jsonify({"error": "队列已满，请稍后再试"}), 429
 
 @app.route('/status/<task_id>', methods=['GET'])
