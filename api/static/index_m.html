@@ -187,19 +187,18 @@
         let currentTaskId = null;
         let taskQueue = [];
         let statusCheckInterval = null;
-
+    
         async function generateImages() {
             const generateBtn = document.getElementById('generateBtn');
             generateBtn.disabled = true;
-
+    
             clearPreviousImages();
-            clearWarning();
-
+    
             const width = parseInt(document.getElementById('width').value);
             const ratio = document.getElementById('ratio').value;
             const [w, h] = ratio.split(':').map(Number);
             const height = Math.round(width * h / w);
-
+    
             const params = {
                 model: document.getElementById('model').value,
                 prompt: document.getElementById('prompt').value,
@@ -209,7 +208,7 @@
                 num_images: parseInt(document.getElementById('numImages').value),
                 seed: parseInt(document.getElementById('seed').value),
             };
-
+    
             try {
                 updateStatus("正在提交任务...");
                 const response = await fetch(`${apiUrl}/generate`, {
@@ -217,27 +216,21 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(params),
                 });
-
-                if (response.status === 400) {
-                    const errorData = await response.json();
-                    if (errorData.warning) {
-                        showWarning(errorData.warning);
-                        updateStatus("生成已取消");
-                        return;
+    
+                const data = await response.json();
+    
+                if (!response.ok) {
+                    if (response.status === 400 && data.error) {
+                        // 处理合规检查失败的情况
+                        updateStatus(data.error);
+                    } else if (response.status === 429) {
+                        updateStatus(data.error || "队列已满，请稍后再试");
+                    } else {
+                        throw new Error(`HTTP error! status: ${response.status}`);
                     }
-                }
-
-                if (response.status === 429) {
-                    const errorData = await response.json();
-                    updateStatus(errorData.error);
                     return;
                 }
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const data = await response.json();
+    
                 if (data.task_id) {
                     addToQueue(data.task_id);
                     await checkStatus(data.task_id);
@@ -251,7 +244,7 @@
                 generateBtn.disabled = false;
             }
         }
-
+    
         function clearPreviousImages() {
             const taskContainer = document.getElementById('taskContainer');
             taskContainer.innerHTML = '';
@@ -259,21 +252,7 @@
             currentTaskId = null;
             clearInterval(statusCheckInterval);
         }
-
-        function showWarning(message) {
-            const warningElement = document.createElement('div');
-            warningElement.className = 'warning';
-            warningElement.textContent = message;
-            document.querySelector('.container').insertBefore(warningElement, document.getElementById('statusResult'));
-        }
-
-        function clearWarning() {
-            const warningElement = document.querySelector('.warning');
-            if (warningElement) {
-                warningElement.remove();
-            }
-        }
-
+    
         function addToQueue(taskId) {
             taskQueue.push(taskId);
             createTaskStatusElement(taskId);
@@ -281,14 +260,14 @@
                 processNextTask();
             }
         }
-
+    
         function processNextTask() {
             if (taskQueue.length > 0) {
                 currentTaskId = taskQueue.shift();
                 startStatusCheck(currentTaskId);
             }
         }
-
+    
         function createTaskStatusElement(taskId) {
             const taskContainer = document.getElementById('taskContainer');
             const taskElement = document.createElement('div');
@@ -298,19 +277,19 @@
             `;
             taskContainer.appendChild(taskElement);
         }
-
+    
         function startStatusCheck(taskId) {
             clearInterval(statusCheckInterval);
             statusCheckInterval = setInterval(() => checkStatus(taskId), 500);
         }
-
+    
         async function checkStatus(taskId) {
             try {
                 const response = await fetch(`${apiUrl}/status/${taskId}`);
                 const data = await response.json();
-
+    
                 updateStatus(getStatusMessage(data.status));
-
+    
                 if (data.status === "完成") {
                     if (data.file_names && data.seeds) {
                         displayImages(taskId, data.file_names, data.seeds);
@@ -325,7 +304,7 @@
                 finishCurrentTask();
             }
         }
-
+    
         function getStatusMessage(status) {
             switch (status) {
                 case "排队中": return "正在排队";
@@ -334,16 +313,16 @@
                 default: return status.startsWith("失败") ? "生成失败：" + status : status;
             }
         }
-
+    
         function finishCurrentTask() {
             clearInterval(statusCheckInterval);
             processNextTask();
         }
-
+    
         function updateStatus(message) {
             document.getElementById('statusResult').textContent = `状态：${message}`;
         }
-
+    
         function displayImages(taskId, fileNames, seeds) {
             const taskElement = document.getElementById(`task-${taskId}`);
             if (taskElement) {
@@ -353,17 +332,17 @@
                     const imgWrapper = document.createElement('div');
                     imgWrapper.style.width = fileNames.length === 1 ? '100%' : '48%';
                     imgWrapper.style.marginBottom = '20px';
-
+    
                     const img = document.createElement('img');
                     img.src = `${apiUrl}/images/${taskId}/${fileName}`;
                     img.style.width = '100%';
                     img.style.borderRadius = '4px';
                     img.style.boxShadow = '0 0 5px rgba(0,0,0,0.2)';
-
+    
                     const seedInfo = document.createElement('div');
                     seedInfo.className = 'seedInfo';
                     seedInfo.textContent = `种子：${seeds[index]}`;
-
+    
                     imgWrapper.appendChild(img);
                     imgWrapper.appendChild(seedInfo);
                     imageContainer.appendChild(imgWrapper);
@@ -372,5 +351,6 @@
             }
         }
     </script>
+    
 </body>
 </html>
