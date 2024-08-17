@@ -229,7 +229,7 @@
         function addToQueue(taskId) {
             taskQueue.push(taskId);
             createTaskStatusElement(taskId);
-            updateStatus(`已加入队列`);
+            updateStatus(`正在排队`);
             if (!currentTaskId) {
                 processNextTask();
             }
@@ -268,7 +268,9 @@
                 const response = await fetch(`${apiUrl}/status/${currentTaskId}`);
                 const data = await response.json();
 
-                if (data.status === "处理中") {
+                if (data.status === "排队中") {
+                    updateStatus("正在排队");
+                } else if (data.status === "处理中") {
                     updateStatus("正在生成图片");
                 } else if (data.status === "完成") {
                     updateStatus("图片生成完成");
