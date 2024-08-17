@@ -176,4 +176,97 @@
                 return;
             }
 
-            const generateBtn = document.getElementByI
+            const generateBtn = document.getElementById('generateBtn');
+            generateBtn.disabled = true;
+
+            const width = parseInt(document.getElementById('width').value);
+            const ratio = document.getElementById('ratio').value;
+            const [w, h] = ratio.split(':').map(Number);
+            const height = Math.round(width * h / w);
+
+            const params = {
+                model: document.getElementById('model').value,
+                prompt: document.getElementById('prompt').value,
+                negative_prompt: "NSFW",  // 默认负面提示词
+                width: width,
+                height: height,
+                num_images: parseInt(document.getElementById('numImages').value),
+                seed: parseInt(document.getElementById('seed').value),
+            };
+
+            try {
+                const response = await fetch(`${apiUrl}/generate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(params),
+                });
+
+                if (response.status === 429) {
+                    const errorData = await response.json();
+                    document.getElementById('statusResult').textContent = errorData.error;
+                    generateBtn.disabled = false;
+                    return;
+                }
+
+                const data = await response.json();
+                if (data.task_id) {
+                    currentTaskId = data.task_id;
+                    startStatusCheck();
+                } else {
+                    document.getElementById('statusResult').textContent = "生成失败：未收到任务ID";
+                    generateBtn.disabled = false;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('statusResult').textContent = "生成失败：网络错误";
+                generateBtn.disabled = false;
+            }
+        }
+
+        function startStatusCheck() {
+            statusCheckInterval = setInterval(checkStatus, 1000);
+        }
+
+        async function checkStatus() {
+            if (!currentTaskId) return;
+
+            try {
+                const response = await fetch(`${apiUrl}/status/${currentTaskId}`);
+                const data = await response.json();
+
+                document.getElementById('statusResult').textContent = `状态：${data.status}, 进度：${data.progress}%`;
+
+                if (data.status === "完成" || data.status.startsWith("失败")) {
+                    clearInterval(statusCheckInterval);
+                    document.getElementById('generateBtn').disabled = false;
+
+                    if (data.status === "完成" && data.file_names) {
+                        displayImages(data.file_names);
+                    }
+                    currentTaskId = null;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('statusResult').textContent = "状态查询失败";
+                clearInterval(statusCheckInterval);
+                document.getElementById('generateBtn').disabled = false;
+                currentTaskId = null;
+            }
+        }
+
+        function displayImages(fileNames) {
+            const imageContainer = document.getElementById('imageContainer');
+            imageContainer.innerHTML = '';
+            fileNames.forEach(fileName => {
+                const img = document.createElement('img');
+                img.src = `${apiUrl}/images/${currentTaskId}/${fileName}`;
+                img.style.width = fileNames.length === 1 ? '100%' : '48%';
+                imageContainer.appendChild(img);
+            });
+        }
+
+        // 初始化时调用一次，确保高度正确设置
+        updateHeight();
+    </script>
+</body>
+</html>
