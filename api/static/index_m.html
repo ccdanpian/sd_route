@@ -102,6 +102,11 @@
             border-radius: 4px;
             box-shadow: 0 0 5px rgba(0,0,0,0.2);
         }
+        .seedInfo {
+            margin-top: 5px;
+            font-size: 0.9em;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -179,7 +184,6 @@
             const generateBtn = document.getElementById('generateBtn');
             generateBtn.disabled = true;
 
-            // 清除之前生成的图片
             clearPreviousImages();
 
             const width = parseInt(document.getElementById('width').value);
@@ -218,7 +222,7 @@
                 const data = await response.json();
                 if (data.task_id) {
                     addToQueue(data.task_id);
-                    await checkStatus(data.task_id);  // 立即检查状态
+                    await checkStatus(data.task_id);
                 } else {
                     updateStatus("生成失败：未收到任务ID");
                 }
@@ -232,10 +236,10 @@
 
         function clearPreviousImages() {
             const taskContainer = document.getElementById('taskContainer');
-            taskContainer.innerHTML = '';  // 清除所有之前的任务和图片
-            taskQueue = [];  // 清空任务队列
-            currentTaskId = null;  // 重置当前任务ID
-            clearInterval(statusCheckInterval);  // 清除状态检查定时器
+            taskContainer.innerHTML = '';
+            taskQueue = [];
+            currentTaskId = null;
+            clearInterval(statusCheckInterval);
         }
 
         function addToQueue(taskId) {
@@ -250,9 +254,6 @@
             if (taskQueue.length > 0) {
                 currentTaskId = taskQueue.shift();
                 startStatusCheck(currentTaskId);
-            } else {
-                currentTaskId = null;
-                updateStatus("空闲");
             }
         }
 
@@ -268,7 +269,7 @@
 
         function startStatusCheck(taskId) {
             clearInterval(statusCheckInterval);
-            statusCheckInterval = setInterval(() => checkStatus(taskId), 500);  // 增加检查频率
+            statusCheckInterval = setInterval(() => checkStatus(taskId), 500);
         }
 
         async function checkStatus(taskId) {
@@ -279,8 +280,8 @@
                 updateStatus(getStatusMessage(data.status));
 
                 if (data.status === "完成") {
-                    if (data.file_names) {
-                        displayImages(taskId, data.file_names);
+                    if (data.file_names && data.seeds) {
+                        displayImages(taskId, data.file_names, data.seeds);
                     }
                     finishCurrentTask();
                 } else if (data.status.startsWith("失败")) {
@@ -311,17 +312,31 @@
             document.getElementById('statusResult').textContent = `状态：${message}`;
         }
 
-        function displayImages(taskId, fileNames) {
+        function displayImages(taskId, fileNames, seeds) {
             const taskElement = document.getElementById(`task-${taskId}`);
             if (taskElement) {
                 const imageContainer = taskElement.querySelector('.imageContainer');
                 imageContainer.innerHTML = '';
-                fileNames.forEach(fileName => {
+                fileNames.forEach((fileName, index) => {
+                    const imgWrapper = document.createElement('div');
+                    imgWrapper.style.width = fileNames.length === 1 ? '100%' : '48%';
+                    imgWrapper.style.marginBottom = '20px';
+
                     const img = document.createElement('img');
                     img.src = `${apiUrl}/images/${taskId}/${fileName}`;
-                    img.style.width = fileNames.length === 1 ? '100%' : '48%';
-                    imageContainer.appendChild(img);
+                    img.style.width = '100%';
+                    img.style.borderRadius = '4px';
+                    img.style.boxShadow = '0 0 5px rgba(0,0,0,0.2)';
+
+                    const seedInfo = document.createElement('div');
+                    seedInfo.className = 'seedInfo';
+                    seedInfo.textContent = `种子：${seeds[index]}`;
+
+                    imgWrapper.appendChild(img);
+                    imgWrapper.appendChild(seedInfo);
+                    imageContainer.appendChild(imgWrapper);
                 });
+                updateStatus("图片生成完成");
             }
         }
     </script>
