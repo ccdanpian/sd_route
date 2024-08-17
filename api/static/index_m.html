@@ -238,7 +238,7 @@
         function processNextTask() {
             if (taskQueue.length > 0) {
                 currentTaskId = taskQueue.shift();
-                updateStatus(`处理中`);
+                updateStatus(`正在生成图片`);
                 startStatusCheck();
             } else {
                 currentTaskId = null;
@@ -268,16 +268,21 @@
                 const response = await fetch(`${apiUrl}/status/${currentTaskId}`);
                 const data = await response.json();
 
-                updateStatus(`${data.status} - 进度：${data.progress}%`);
+                if (data.status === "处理中") {
+                    updateStatus("正在生成图片");
+                } else if (data.status === "完成") {
+                    updateStatus("图片生成完成");
+                    if (data.file_names) {
+                        displayImages(currentTaskId, data.file_names);
+                    }
+                    processNextTask();
+                } else if (data.status.startsWith("失败")) {
+                    updateStatus("生成失败：" + data.status);
+                    processNextTask();
+                }
 
                 if (data.status === "完成" || data.status.startsWith("失败")) {
                     clearInterval(statusCheckInterval);
-
-                    if (data.status === "完成" && data.file_names) {
-                        displayImages(currentTaskId, data.file_names);
-                    }
-
-                    processNextTask();
                 }
             } catch (error) {
                 console.error('Error:', error);
