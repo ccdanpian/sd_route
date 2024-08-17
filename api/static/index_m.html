@@ -287,12 +287,12 @@
             try {
                 const response = await fetch(`${apiUrl}/status/${taskId}`);
                 const data = await response.json();
-    
+        
                 updateStatus(getStatusMessage(data.status));
-    
+        
                 if (data.status === "完成") {
-                    if (data.file_names && data.seeds) {
-                        displayImages(taskId, data.file_names, data.seeds);
+                    if (data.file_names && data.seeds && data.translated_prompt) {
+                        displayImages(taskId, data.file_names, data.seeds, data.translated_prompt);
                     }
                     finishCurrentTask();
                 } else if (data.status.startsWith("失败")) {
@@ -323,7 +323,7 @@
             document.getElementById('statusResult').textContent = `状态：${message}`;
         }
     
-        function displayImages(taskId, fileNames, seeds) {
+        function displayImages(taskId, fileNames, seeds, translatedPrompt) {
             const taskElement = document.getElementById(`task-${taskId}`);
             if (taskElement) {
                 const imageContainer = taskElement.querySelector('.imageContainer');
@@ -332,23 +332,36 @@
                     const imgWrapper = document.createElement('div');
                     imgWrapper.style.width = fileNames.length === 1 ? '100%' : '48%';
                     imgWrapper.style.marginBottom = '20px';
-    
+        
                     const img = document.createElement('img');
                     img.src = `${apiUrl}/images/${taskId}/${fileName}`;
                     img.style.width = '100%';
                     img.style.borderRadius = '4px';
                     img.style.boxShadow = '0 0 5px rgba(0,0,0,0.2)';
-    
+        
+                    const infoContainer = document.createElement('div');
+                    infoContainer.className = 'imageInfo';
+                    infoContainer.style.marginTop = '5px';
+                    infoContainer.style.fontSize = '0.9em';
+                    infoContainer.style.color = '#666';
+        
                     const seedInfo = document.createElement('div');
-                    seedInfo.className = 'seedInfo';
                     seedInfo.textContent = `种子：${seeds[index]}`;
-    
+        
+                    const promptInfo = document.createElement('div');
+                    promptInfo.textContent = `提示词：${translatedPrompt}`;
+                    promptInfo.style.wordBreak = 'break-word';
+        
+                    infoContainer.appendChild(seedInfo);
+                    infoContainer.appendChild(promptInfo);
+        
                     imgWrapper.appendChild(img);
-                    imgWrapper.appendChild(seedInfo);
+                    imgWrapper.appendChild(infoContainer);
                     imageContainer.appendChild(imgWrapper);
                 });
                 updateStatus("图片生成完成");
             }
+        }
         }
     </script>
     
