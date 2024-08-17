@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # 从环境变量获取配置
-SD_URL = os.getenv('SD_URL', 'https://sd.italkwithai.online:21443/')
+SD_URL = os.getenv('SD_URL', 'https://sd.italkwithai.online:21443')
 output_dir = os.getenv('SD_OUTPUT_DIR', 'output')
 
 logger.info(f"SD_URL: {SD_URL}")
@@ -157,7 +157,7 @@ def generate_images(task_id, model, prompt, negative_prompt, width, height, num_
 
 @app.route('/')
 def index():
-    return send_from_directory('static', 'index.html')
+    return send_from_directory('static', 'index_m.html')
 
 @app.route('/generate', methods=['POST'])
 def generate():
