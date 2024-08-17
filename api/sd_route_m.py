@@ -256,7 +256,7 @@ def generate():
     try:
         task_queue.put_nowait(task)
         task_status[task_id] = {"status": "排队中", "progress": 0}
-        return jsonify({"task_id": task_id, "translated_prompt": translated_prompt})
+        return jsonify({"task_id": task_id})
     except Full:
         return jsonify({"error": "队列已满，请稍后再试"}), 429
 
