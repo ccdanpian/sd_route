@@ -107,6 +107,14 @@
             font-size: 0.9em;
             color: #666;
         }
+        .warning {
+            background-color: #ffeeee;
+            border: 1px solid #ffcccc;
+            color: #ff0000;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
@@ -185,6 +193,7 @@
             generateBtn.disabled = true;
 
             clearPreviousImages();
+            clearWarning();
 
             const width = parseInt(document.getElementById('width').value);
             const ratio = document.getElementById('ratio').value;
@@ -208,6 +217,15 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(params),
                 });
+
+                if (response.status === 400) {
+                    const errorData = await response.json();
+                    if (errorData.warning) {
+                        showWarning(errorData.warning);
+                        updateStatus("生成已取消");
+                        return;
+                    }
+                }
 
                 if (response.status === 429) {
                     const errorData = await response.json();
@@ -240,6 +258,20 @@
             taskQueue = [];
             currentTaskId = null;
             clearInterval(statusCheckInterval);
+        }
+
+        function showWarning(message) {
+            const warningElement = document.createElement('div');
+            warningElement.className = 'warning';
+            warningElement.textContent = message;
+            document.querySelector('.container').insertBefore(warningElement, document.getElementById('statusResult'));
+        }
+
+        function clearWarning() {
+            const warningElement = document.querySelector('.warning');
+            if (warningElement) {
+                warningElement.remove();
+            }
         }
 
         function addToQueue(taskId) {
