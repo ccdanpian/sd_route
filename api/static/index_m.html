@@ -42,7 +42,7 @@
             margin-right: 10px;
         }
         .form-group.small {
-            flex: 0 0 80px;
+            flex: 0 0 100px;
         }
         .form-group:last-child {
             margin-right: 0;
@@ -134,7 +134,11 @@
         <div class="form-row">
             <div class="form-group medium">
                 <label for="width">宽度</label>
-                <input type="number" id="width" value="512" min="64" max="2048" step="64">
+                <select id="width" onchange="updateHeight()">
+                    <option value="512">512</option>
+                    <option value="800">800</option>
+                    <option value="1024">1024</option>
+                </select>
             </div>
             <div class="form-group medium">
                 <label for="ratio">比例</label>
@@ -153,7 +157,10 @@
                     <option value="2">2</option>
                 </select>
             </div>
-            <div class="form-group small">
+        </div>
+
+        <div class="form-row">
+            <div class="form-group full">
                 <label for="seed">种子</label>
                 <input type="number" id="seed" value="-1" min="-1">
             </div>
@@ -174,10 +181,7 @@
         let statusCheckInterval = null;
 
         function updateHeight() {
-            const width = parseInt(document.getElementById('width').value);
-            const ratio = document.getElementById('ratio').value;
-            const [w, h] = ratio.split(':').map(Number);
-            const height = Math.round(width * h / w);
+            // 在这个版本中，我们不需要更新高度，因为宽度是固定选项
         }
 
         async function generateImages() {
@@ -230,7 +234,7 @@
         function addToQueue(taskId) {
             taskQueue.push(taskId);
             createTaskStatusElement(taskId);
-            updateStatus(`任务 ${taskId} 已加入队列`);
+            updateStatus(`已加入队列`);
             if (!currentTaskId) {
                 processNextTask();
             }
@@ -239,11 +243,11 @@
         function processNextTask() {
             if (taskQueue.length > 0) {
                 currentTaskId = taskQueue.shift();
-                updateStatus(`正在处理任务 ${currentTaskId}`);
+                updateStatus(`处理中`);
                 startStatusCheck();
             } else {
                 currentTaskId = null;
-                updateStatus("所有任务已完成");
+                updateStatus("空闲");
             }
         }
 
@@ -252,7 +256,6 @@
             const taskElement = document.createElement('div');
             taskElement.id = `task-${taskId}`;
             taskElement.innerHTML = `
-                <div class="taskStatus">任务 ${taskId}: 等待中</div>
                 <div class="imageContainer"></div>
             `;
             taskContainer.appendChild(taskElement);
@@ -270,7 +273,7 @@
                 const response = await fetch(`${apiUrl}/status/${currentTaskId}`);
                 const data = await response.json();
 
-                updateTaskStatus(currentTaskId, data);
+                updateStatus(`${data.status} - 进度：${data.progress}%`);
 
                 if (data.status === "完成" || data.status.startsWith("失败")) {
                     clearInterval(statusCheckInterval);
@@ -283,7 +286,7 @@
                 }
             } catch (error) {
                 console.error('Error:', error);
-                updateTaskStatus(currentTaskId, { status: "状态查询失败", progress: 0 });
+                updateStatus("状态查询失败");
                 clearInterval(statusCheckInterval);
                 processNextTask();
             }
@@ -291,14 +294,6 @@
 
         function updateStatus(message) {
             document.getElementById('statusResult').textContent = `状态：${message}`;
-        }
-
-        function updateTaskStatus(taskId, data) {
-            const taskElement = document.getElementById(`task-${taskId}`);
-            if (taskElement) {
-                const statusElement = taskElement.querySelector('.taskStatus');
-                statusElement.textContent = `任务 ${taskId}: ${data.status}, 进度：${data.progress}%`;
-            }
         }
 
         function displayImages(taskId, fileNames) {
@@ -314,9 +309,6 @@
                 });
             }
         }
-
-        // 初始化时调用一次，确保高度正确设置
-        updateHeight();
     </script>
 </body>
 </html>
