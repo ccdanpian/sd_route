@@ -179,6 +179,9 @@
             const generateBtn = document.getElementById('generateBtn');
             generateBtn.disabled = true;
 
+            // 清除之前生成的图片
+            clearPreviousImages();
+
             const width = parseInt(document.getElementById('width').value);
             const ratio = document.getElementById('ratio').value;
             const [w, h] = ratio.split(':').map(Number);
@@ -225,6 +228,14 @@
             } finally {
                 generateBtn.disabled = false;
             }
+        }
+
+        function clearPreviousImages() {
+            const taskContainer = document.getElementById('taskContainer');
+            taskContainer.innerHTML = '';  // 清除所有之前的任务和图片
+            taskQueue = [];  // 清空任务队列
+            currentTaskId = null;  // 重置当前任务ID
+            clearInterval(statusCheckInterval);  // 清除状态检查定时器
         }
 
         function addToQueue(taskId) {
