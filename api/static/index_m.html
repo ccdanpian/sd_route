@@ -195,6 +195,7 @@
             };
 
             try {
+                updateStatus("正在提交任务...");
                 const response = await fetch(`${apiUrl}/generate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -204,7 +205,6 @@
                 if (response.status === 429) {
                     const errorData = await response.json();
                     updateStatus(errorData.error);
-                    generateBtn.disabled = false;
                     return;
                 }
 
@@ -215,6 +215,7 @@
                 const data = await response.json();
                 if (data.task_id) {
                     addToQueue(data.task_id);
+                    await checkStatus(data.task_id);  // 立即检查状态
                 } else {
                     updateStatus("生成失败：未收到任务ID");
                 }
@@ -229,7 +230,6 @@
         function addToQueue(taskId) {
             taskQueue.push(taskId);
             createTaskStatusElement(taskId);
-            updateStatus(`正在排队`);
             if (!currentTaskId) {
                 processNextTask();
             }
@@ -238,8 +238,7 @@
         function processNextTask() {
             if (taskQueue.length > 0) {
                 currentTaskId = taskQueue.shift();
-                updateStatus(`正在生成图片`);
-                startStatusCheck();
+                startStatusCheck(currentTaskId);
             } else {
                 currentTaskId = null;
                 updateStatus("空闲");
@@ -256,42 +255,45 @@
             taskContainer.appendChild(taskElement);
         }
 
-        function startStatusCheck() {
+        function startStatusCheck(taskId) {
             clearInterval(statusCheckInterval);
-            statusCheckInterval = setInterval(checkStatus, 1000);
+            statusCheckInterval = setInterval(() => checkStatus(taskId), 500);  // 增加检查频率
         }
 
-        async function checkStatus() {
-            if (!currentTaskId) return;
-
+        async function checkStatus(taskId) {
             try {
-                const response = await fetch(`${apiUrl}/status/${currentTaskId}`);
+                const response = await fetch(`${apiUrl}/status/${taskId}`);
                 const data = await response.json();
 
-                if (data.status === "排队中") {
-                    updateStatus("正在排队");
-                } else if (data.status === "处理中") {
-                    updateStatus("正在生成图片");
-                } else if (data.status === "完成") {
-                    updateStatus("图片生成完成");
-                    if (data.file_names) {
-                        displayImages(currentTaskId, data.file_names);
-                    }
-                    processNextTask();
-                } else if (data.status.startsWith("失败")) {
-                    updateStatus("生成失败：" + data.status);
-                    processNextTask();
-                }
+                updateStatus(getStatusMessage(data.status));
 
-                if (data.status === "完成" || data.status.startsWith("失败")) {
-                    clearInterval(statusCheckInterval);
+                if (data.status === "完成") {
+                    if (data.file_names) {
+                        displayImages(taskId, data.file_names);
+                    }
+                    finishCurrentTask();
+                } else if (data.status.startsWith("失败")) {
+                    finishCurrentTask();
                 }
             } catch (error) {
                 console.error('Error:', error);
                 updateStatus("状态查询失败");
-                clearInterval(statusCheckInterval);
-                processNextTask();
+                finishCurrentTask();
             }
+        }
+
+        function getStatusMessage(status) {
+            switch (status) {
+                case "排队中": return "正在排队";
+                case "处理中": return "正在生成图片";
+                case "完成": return "图片生成完成";
+                default: return status.startsWith("失败") ? "生成失败：" + status : status;
+            }
+        }
+
+        function finishCurrentTask() {
+            clearInterval(statusCheckInterval);
+            processNextTask();
         }
 
         function updateStatus(message) {
