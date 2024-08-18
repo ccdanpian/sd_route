@@ -177,7 +177,7 @@ def check_prompt_with_chatgpt(prompt):
         response = client.chat.completions.create(
             model="gpt-4o-mini-2024-07-18",
             messages=[
-                {"role": "system", "content": "你是一个内容审核助手。请判断以下提示词是否包含色情或中国国家领导人信息。只回答'是'或'否'，不要解释。"},
+                {"role": "system", "content": "你是一个内容审核助手。请判断以下提示词是否包含严重色情或中国国家领导人信息。只回答'是'或'否'，不要解释。"},
                 {"role": "user", "content": f"提示词: {prompt}"}
             ]
         )
