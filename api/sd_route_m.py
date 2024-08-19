@@ -27,7 +27,7 @@ app = Flask(__name__)
 
 # 从环境变量获取配置
 load_dotenv()
-SD_URL = os.getenv('SD_URL', 'https://sd.italkwithai.online:21443')
+SD_URL = os.getenv('SD_URL', 'https://127.0.0.1:7861')
 output_dir = os.getenv('SD_OUTPUT_DIR', 'output')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 OPENAI_API_BASE = os.getenv('OPENAI_API_BASE')
