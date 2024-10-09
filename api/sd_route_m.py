@@ -32,6 +32,11 @@ SD_URL = os.getenv('SD_URL', 'https://127.0.0.1:7861')
 OUTPUT_DIR = os.getenv('SD_OUTPUT_DIR', 'output')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 OPENAI_API_BASE = os.getenv('OPENAI_API_BASE')
+ENABLE_IP_RESTRICTION = os.getenv('ENABLE_IP_RESTRICTION', 'False').lower() == 'true'
+CHATGPT_MODEL = os.getenv('CHATGPT_MODEL', 'gpt-4o-mini-2024-07-18')
+CONTENT_REVIEW_PROMPT = os.getenv('CONTENT_REVIEW_PROMPT', '你是一个内容审核助手。请判断以下提示词是否包含身体敏感部位未被遮挡、或中国国家领导人信息。只回答“是”或“否”，不要解释。')
+# 新增环境变量引入
+MAX_QUEUE_SIZE = int(os.getenv('MAX_QUEUE_SIZE', '3'))
 
 if not OPENAI_API_KEY:
     raise ValueError("请设置 OPENAI_API_KEY 环境变量")
@@ -45,13 +50,19 @@ client = OpenAI(
 logger.info(f"SD_URL: {SD_URL}")
 logger.info(f"Output directory: {OUTPUT_DIR}")
 logger.info(f"OpenAI API Base: {OPENAI_API_BASE if OPENAI_API_BASE else 'Using default'}")
+logger.info(f"IP restriction enabled: {ENABLE_IP_RESTRICTION}")
+logger.info(f"ChatGPT Model: {CHATGPT_MODEL}")
+logger.info(f"Max Queue Size: {MAX_QUEUE_SIZE}")  # 新增日志输出
 
 # 任务队列和状态字典
-MAX_QUEUE_SIZE = 3
 task_queue = Queue(maxsize=MAX_QUEUE_SIZE)
 task_status = {}
 current_task = None
 task_lock = threading.Lock()
+
+# 添加一个字典来跟踪 IP 地址的活跃请求
+active_ip_requests = {}
+ip_lock = threading.Lock()
 
 def update_queue_positions():
     with task_lock:
@@ -59,7 +70,7 @@ def update_queue_positions():
             if task_status[task['task_id']]['status'] == "排队中":
                 task_status[task['task_id']]['queuePosition'] = i
 
-def process_task(task, phone_number):
+def process_task(task, phone_number, ip_address):
     global current_task
     task_id = task['task_id']
     update_task_status(task_id, "处理中", 0)
@@ -73,10 +84,14 @@ def process_task(task, phone_number):
         with task_lock:
             task_queue.get()
             current_task = None
+        if ENABLE_IP_RESTRICTION:
+            with ip_lock:
+                del active_ip_requests[ip_address]
         update_queue_positions()
         if not task_queue.empty():
             next_task = task_queue.queue[0]
-            threading.Thread(target=process_task, args=(next_task, phone_number)).start()
+            next_ip = next_task.get('ip_address', 'unknown')
+            threading.Thread(target=process_task, args=(next_task, phone_number, next_ip)).start()
 
 def update_task_status(task_id, status, progress, **kwargs):
     with task_lock:
@@ -193,9 +208,9 @@ def check_prompt_with_chatgpt(prompt):
     try:
         logger.info(f"正在检查提示词: {prompt}")
         response = client.chat.completions.create(
-            model="gpt-4o-mini-2024-07-18",
+            model=CHATGPT_MODEL,
             messages=[
-                {"role": "system", "content": "你是一个内容审核助手。请判断以下提示词是否包含身体敏感部位未被遮挡、或中国国家领导人信息。只回答'是'或'否'，不要解释。"},
+                {"role": "system", "content": CONTENT_REVIEW_PROMPT},
                 {"role": "user", "content": f"提示词: {prompt}"}
             ]
         )
@@ -216,7 +231,7 @@ def translate_to_english(prompt):
     try:
         logger.info(f"正在将提示词翻译为英语: {prompt}")
         response = client.chat.completions.create(
-            model="gpt-4o-mini-2024-07-18",
+            model=CHATGPT_MODEL,
             messages=[
                 {"role": "system", "content": "你是一个翻译助手。请将给定的文本翻译成英语。如果文本已经是英语，请原样返回。只返回翻译结果，不要添加任何解释、引号或额外的文字。"},
                 {"role": "user", "content": prompt}
@@ -243,6 +258,17 @@ def generate():
     logger.info("收到生成图片请求")
     data = request.json
     logger.debug(f"请求数据: {json.dumps(data, indent=2)}")
+
+    # 获取请求的 IP 地址
+    ip_address = request.remote_addr
+    logger.info(f"请求 IP 地址: {ip_address}")
+
+    # 只在启用 IP 限制时检查
+    if ENABLE_IP_RESTRICTION:
+        with ip_lock:
+            if ip_address in active_ip_requests:
+                return jsonify({"error": "您已有一个活跃请求，请等待当前请求完成后再试"}), 429
+            active_ip_requests[ip_address] = True
 
     phone_number = request.cookies.get('phoneNumber')
     logger.info(f'*****phoneNumber: {phone_number}')
@@ -273,6 +299,9 @@ def generate():
     }
 
     if task_queue.qsize() >= MAX_QUEUE_SIZE:
+        if ENABLE_IP_RESTRICTION:
+            with ip_lock:
+                del active_ip_requests[ip_address]
         return jsonify({"error": "队列已满，请稍后再试"}), 429
 
     queue_position = task_queue.qsize()
@@ -280,7 +309,7 @@ def generate():
     task_status[task_id] = {"status": "排队中" if queue_position > 0 else "处理中", "progress": 0, "queuePosition": queue_position}
 
     if queue_position == 0:
-        threading.Thread(target=process_task, args=(task, phone_number)).start()
+        threading.Thread(target=process_task, args=(task, phone_number, ip_address)).start()
 
     return jsonify({"task_id": task_id, "queuePosition": queue_position})
 
