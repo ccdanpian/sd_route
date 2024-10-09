@@ -1,0 +1,85 @@
+body, html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: Arial, sans-serif;
+}
+
+.container {
+    max-width: 100%;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+h1 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    text-align: center; /* 居中标题 */
+}
+
+#sd-image-generation-container {
+    width: 100%;
+    max-width: 90%; /* 限制最大宽度 */
+    margin: 0 auto; /* 居中容器 */
+}
+
+.input-container-sd {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+#sd-prompt {
+    width: 100%;
+    padding: 10px;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    resize: vertical;
+}
+
+.form-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+select, input[type="number"] {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+#sd-generate-btn {
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+#sd-generate-btn:hover {
+    background-color: #0056b3;
+}
+
+@media (max-width: 768px) {
+    .form-row {
+        flex-direction: column;
+    }
+}
+
+#sd-result-container {
+    margin-top: 20px;
+    border: 1px solid #ddd;
+    padding: 15px;
+    border-radius: 5px;
+}
+
+#sd-result-container img {
+    max-width: 100%;
+    height: auto;
+    margin-bottom: 10px;
+}
