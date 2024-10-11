@@ -100,7 +100,7 @@ def update_task_status(task_id, status, progress, **kwargs):
             "progress": progress,
             **kwargs
         }
-    logger.info(f"任务 {task_id} 状态更新: {status}, 进度: {progress}%")
+    # logger.info(f"任务 {task_id} 状态更新: {status}, 进度: {progress}%")
 
 def generate_images(task_id, model, prompt, negative_prompt, width, height, num_images, seed, phone_number):
     if seed == -1:
@@ -315,11 +315,11 @@ def generate():
 
 @app.route('/sd/status/<task_id>', methods=['GET'])
 def get_status(task_id):
-    logger.info(f"收到任务 {task_id} 的状态请求")
+    # logger.info(f"收到任务 {task_id} 的状态请求")
     status = task_status.get(task_id, {"status": "未知任务", "progress": 0})
     if status["status"] == "排队中":
         status["queuePosition"] = next((i for i, task in enumerate(list(task_queue.queue)) if task['task_id'] == task_id), -1)
-    logger.debug(f"任务 {task_id} 状态: {status}")
+    # logger.debug(f"任务 {task_id} 状态: {status}")
     return jsonify(status)
 
 @app.route('/images/sd/<task_id>/<path:filename>')
