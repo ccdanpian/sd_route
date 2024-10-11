@@ -67,26 +67,30 @@ ip_lock = threading.Lock()
 def update_queue_positions():
     with task_lock:
         for i, task in enumerate(list(task_queue.queue)):
-            if task_status[task['task_id']]['status'] == "排队中":
-                task_status[task['task_id']]['queuePosition'] = i
+            task_id = task['task_id']
+            if task_id in task_status and task_status[task_id]['status'] == "排队中":
+                task_status[task_id]['queuePosition'] = i
 
 def process_task(task, phone_number, ip_address):
     global current_task
     task_id = task['task_id']
     update_task_status(task_id, "处理中", 0)
     try:
-        seeds, file_names, save_time = generate_images(**task, phone_number=phone_number)
+        # 创建一个不包含 ip_address 的任务副本
+        task_copy = {k: v for k, v in task.items() if k != 'ip_address'}
+        seeds, file_names, save_time = generate_images(**task_copy, phone_number=phone_number)
         update_task_status(task_id, "完成", 100, seeds=seeds, file_names=file_names, translated_prompt=task['prompt'], phone_number=phone_number, save_time=save_time)
     except Exception as e:
         logger.error(f"处理任务 {task_id} 时出错: {str(e)}")
         update_task_status(task_id, f"失败: {str(e)}", 100, phone_number=phone_number)
     finally:
         with task_lock:
-            task_queue.get()
+            if not task_queue.empty():
+                task_queue.get()
             current_task = None
         if ENABLE_IP_RESTRICTION:
             with ip_lock:
-                del active_ip_requests[ip_address]
+                active_ip_requests.pop(ip_address, None)
         update_queue_positions()
         if not task_queue.empty():
             next_task = task_queue.queue[0]
@@ -253,6 +257,16 @@ def translate_to_english(prompt):
 def index():
     return send_from_directory('static', 'index_m.html')
 
+def get_client_ip():
+    if request.headers.get('X-Forwarded-For'):
+        return request.headers.get('X-Forwarded-For').split(',')[0]
+    elif request.headers.get('X-Real-IP'):
+        return request.headers.get('X-Real-IP')
+    else:
+        return request.remote_addr
+
+
+    
 @app.route('/sd/generate', methods=['POST'])
 def generate():
     logger.info("收到生成图片请求")
@@ -260,7 +274,7 @@ def generate():
     logger.debug(f"请求数据: {json.dumps(data, indent=2)}")
 
     # 获取请求的 IP 地址
-    ip_address = request.remote_addr
+    ip_address = get_client_ip()
     logger.info(f"请求 IP 地址: {ip_address}")
 
     # 只在启用 IP 限制时检查
@@ -277,14 +291,15 @@ def generate():
     if not prompt:
         return jsonify({"error": "提示词不能为空"}), 400
 
-    # 使用ChatGPT检查提示词
-    contains_inappropriate_content = check_prompt_with_chatgpt(prompt)
+    try:
+        contains_inappropriate_content = check_prompt_with_chatgpt(prompt)
+        if contains_inappropriate_content:
+            return jsonify({"error": "提示词可能包含不适当的内容。请修改后重试。"}), 400
 
-    if contains_inappropriate_content:
-        return jsonify({"error": "提示词可能包含不适当的内容。请修改后重试。"}), 400
-
-    # 翻译提示词为英语
-    translated_prompt = translate_to_english(prompt)
+        translated_prompt = translate_to_english(prompt)
+    except Exception as e:
+        logger.error(f"处理提示词时出错: {str(e)}")
+        return jsonify({"error": "处理提示词时出现错误，请稍后重试。"}), 500
 
     task_id = str(uuid4())
     task = {
@@ -295,7 +310,8 @@ def generate():
         'width': data.get('width', 512),
         'height': data.get('height', 512),
         'num_images': data.get('num_images', 1),
-        'seed': data.get('seed', -1)
+        'seed': data.get('seed', -1),
+        'ip_address': ip_address  # 保留 IP 地址在任务信息中
     }
 
     if task_queue.qsize() >= MAX_QUEUE_SIZE:
@@ -329,4 +345,4 @@ def serve_image(task_id, filename):
 
 if __name__ == '__main__':
     logger.info("启动服务器")
-    app.run(host='0.0.0.0', port=25000, threaded=True)
+    app.run(host='0.0.0.0', port=25001, threaded=True)
