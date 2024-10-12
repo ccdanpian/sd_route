@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, send_from_directory, make_response
 import requests
 import io
+from io import BytesIO
 import base64
 from PIL import Image
 import os
@@ -77,8 +78,14 @@ def process_task(task, phone_number, ip_address):
     task_id = task['task_id']
     update_task_status(task_id, "处理中", 0)
     try:
-        seeds, file_names, save_time = generate_images(task)
-        update_task_status(task_id, "完成", 100, seeds=seeds, file_names=file_names, translated_prompt=task['prompt'], phone_number=phone_number, save_time=save_time)
+        if task['type'] == 'inpaint':
+            result = inpaint_image(task)
+            update_task_status(task_id, "完成", 100, inpainted_image=result['inpainted_image'], message=result['message'])
+        elif task['type'] == 'generate':
+            seeds, file_names, save_time = generate_images(task)
+            update_task_status(task_id, "完成", 100, seeds=seeds, file_names=file_names, translated_prompt=task['prompt'], phone_number=phone_number, save_time=save_time)
+        else:
+            raise ValueError(f"未知的任务类型: {task['type']}")
     except Exception as e:
         logger.error(f"处理任务 {task_id} 时出错: {str(e)}")
         update_task_status(task_id, f"失败: {str(e)}", 100, phone_number=phone_number)
@@ -140,7 +147,7 @@ def generate_images(task):
     payload = {
         "prompt": task['prompt'],
         "negative_prompt": task['negative_prompt'],
-        "steps": 30,
+        "steps": 15,
         "sampler_name": "Euler",
         "scheduler": "Simple",
         "cfg_scale": 1,
@@ -198,7 +205,7 @@ def generate_images(task):
         try:
             image_data = base64.b64decode(img_data)
             image = Image.open(io.BytesIO(image_data))
-            file_name = f"{timestamp}_{task['model']}_{seeds[i]}.png"
+            file_name = f"{timestamp}_{seeds[i]}.png"
             file_path = os.path.join(task_output_dir, file_name)
             image.save(file_path)
             saved_files.append(file_name)
@@ -337,6 +344,7 @@ def generate():
 
         task = {
             'task_id': task_id,
+            'type': 'generate',  # 添加 type 字段
             'model': model_params,
             'prompt': translated_prompt,
             'negative_prompt': data.get('negative_prompt', 'NSFW'),
@@ -378,6 +386,202 @@ def get_status(task_id):
 def serve_image(task_id, filename):
     logger.info(f"请求图片: {filename}")
     return send_from_directory(os.path.join(OUTPUT_DIR, task_id), filename)
+
+# 添加这个新函数到文件中
+def encode_image_to_base64(image_data):
+    return base64.b64encode(image_data).decode('utf-8')
+
+# 假设我们有一个全局变量来控制调试模式
+DEBUG_MODE = True  # 在生产环境中应设置为 False
+
+def save_debug_image(image_data, filename):
+    if not DEBUG_MODE:
+        return
+    debug_dir = "debug_images"
+    os.makedirs(debug_dir, exist_ok=True)
+    file_path = os.path.join(debug_dir, filename)
+    with open(file_path, "wb") as f:
+        f.write(image_data)
+    logger.debug(f"保存调试图片: {file_path}")
+
+def get_image_dimensions(image_data):
+    with Image.open(BytesIO(image_data)) as img:
+        return img.size
+
+# 添加新的 inpaint 路由
+@app.route('/sd/inpaint', methods=['POST'])
+def inpaint():
+    logger.info("收到图片重绘请求")
+    data = request.json
+    logger.info(f"请求数据: prompt={data.get('prompt')}, model_name={data.get('model_name')}")
+
+    # 获取请求的 IP 地址
+    ip_address = get_client_ip()
+    logger.info(f"请求 IP 地址: {ip_address}")
+
+    # 只在启用 IP 限制时检查
+    if ENABLE_IP_RESTRICTION:
+        with ip_lock:
+            if ip_address in active_ip_requests:
+                return jsonify({"error": "您已有一个活跃请求，请等待当前请求完成后再试"}), 429
+            active_ip_requests[ip_address] = True
+
+    phone_number = request.cookies.get('phoneNumber')
+    logger.info(f'*****phoneNumber: {phone_number}')
+
+    prompt = data.get('prompt', '')
+    if not prompt:
+        return jsonify({"error": "提示词不能为空"}), 400
+
+    try:
+        contains_inappropriate_content = check_prompt_with_chatgpt(prompt)
+        if contains_inappropriate_content:
+            return jsonify({"error": "提示词可能包含不适当的内容。请修改后重试。"}), 400
+
+        translated_prompt = translate_to_english(prompt)
+
+        task_id = str(uuid4())
+
+        task = {
+            'task_id': task_id,
+            'type': 'inpaint',
+            'prompt': translated_prompt,
+            'original_image': data.get('original_image'),
+            'mask_image': data.get('mask_image'),
+            'model_name': data.get('model_name', "realisticVisionV51_v51VAE.safetensors"),
+            'model': SD_MODEL,  # 添加这行，确保与 generate 任务结构一致
+            'ip_address': ip_address
+        }
+
+        # 如果有 LoRA 信息，也添加到任务中
+        if data.get('lora', False):
+            lora_name = data.get('lora_name', '')
+            lora_weight = data.get('lora_weight', 0.7)
+            task['model'] += f"<lora:{lora_name}:{lora_weight}>"
+
+        if task_queue.qsize() >= MAX_QUEUE_SIZE:
+            if ENABLE_IP_RESTRICTION:
+                with ip_lock:
+                    del active_ip_requests[ip_address]
+            return jsonify({"error": "队列已满，请稍后再试"}), 429
+
+        queue_position = task_queue.qsize()
+        task_queue.put(task)
+        task_status[task_id] = {"status": "排队中" if queue_position > 0 else "处理中", "progress": 0, "queuePosition": queue_position}
+
+        if queue_position == 0:
+            threading.Thread(target=process_task, args=(task, phone_number, ip_address)).start()
+
+        return jsonify({"task_id": task_id, "queuePosition": queue_position})
+    except Exception as e:
+        logger.error(f"处理提示词时出错: {str(e)}")
+        return jsonify({"error": "处理提示词时出现错误，请稍后重试。"}), 500
+
+# 修改 inpaint_image 函数以返回结果而不是直接响应
+def inpaint_image(task):
+    prompt = task.get('prompt')
+    original_image = task.get('original_image')
+    mask_image = task.get('mask_image')
+    model_name = task.get('model_name')
+
+    logger.info(f"开始处理重绘任务: task_id={task.get('task_id')}, prompt={prompt}, model_name={model_name}")
+
+    if not all([prompt, original_image, mask_image, model_name]):
+        missing = [k for k, v in {'prompt': prompt, 'original_image': original_image, 
+                                  'mask_image': mask_image, 'model_name': model_name}.items() if not v]
+        error_msg = f"重绘任务缺少必要参数: {', '.join(missing)}"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+
+    # 首先设置模型和LoRA
+    set_model_and_lora(task)
+
+    try:
+        # 解码图片数据
+        original_image_data = base64.b64decode(original_image.split(',')[1])
+        mask_image_data = base64.b64decode(mask_image.split(',')[1])
+
+        # 保存调试图片
+        save_debug_image(original_image_data, f"original_{task['task_id']}.png")
+        save_debug_image(mask_image_data, f"mask_{task['task_id']}.png")
+
+        # 获取图片尺寸
+        original_width, original_height = get_image_dimensions(original_image_data)
+        mask_width, mask_height = get_image_dimensions(mask_image_data)
+        
+        logger.info(f"原始图片尺寸: {original_width}x{original_height}")
+        logger.info(f"遮罩图片尺寸: {mask_width}x{mask_height}")
+
+        # 编码图片
+        original_image_b64 = base64.b64encode(original_image_data).decode('utf-8')
+        mask_image_b64 = base64.b64encode(mask_image_data).decode('utf-8')
+        
+        logger.info("成功处理原始图片和遮罩图片")
+    except Exception as e:
+        logger.error(f"处理图片数据时出错: {str(e)}")
+        raise
+
+    # 构建payload
+    payload = {
+        "init_images": [original_image_b64],
+        "mask": mask_image_b64,
+        "prompt": prompt,
+        "negative_prompt": "",
+        "seed": -1,
+        "batch_size": 1,
+        "n_iter": 1,
+        "steps": 30,
+        "cfg_scale": 1,
+        "width": original_width,
+        "height": original_height,
+        "resize_mode": 0,
+        "mask_blur": 4,
+        "inpainting_fill": 1,
+        "inpaint_full_res": True,
+        "inpaint_full_res_padding": 32,
+        "sampler_name": "Euler",
+        "denoising_strength": 0.75,
+        "mask_mode": 0,
+        "inpainting_mask_invert": 0,
+        "override_settings": {
+            "sd_model_checkpoint": model_name
+        },
+        "override_settings_restore_afterwards": True,
+        "script_args": [],
+        "include_init_images": False,
+        "script_name": "",
+        "send_images": True,
+        "save_images": False,
+        "alwayson_scripts": {}
+    }
+
+    logger.info(f"准备发送重绘请求到 {SD_URL}")
+    try:
+        response = requests.post(url=f'{SD_URL}/sdapi/v1/img2img', json=payload, verify=False, timeout=120)
+        response.raise_for_status()
+        result = response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"图片重绘请求失败: {str(e)}")
+        raise Exception(f"图片重绘请求失败: {str(e)}")
+
+    if 'images' not in result or not result['images']:
+        logger.error("响应中没有有效的图片数据")
+        raise Exception("响应中没有有效的图片数据")
+
+    inpainted_image = result['images'][0]
+    logger.info("图片重绘成功完成")
+    
+    # 保存重绘后的图片（仅用于调试）
+    if DEBUG_MODE:
+        inpainted_image_data = base64.b64decode(inpainted_image)
+        save_debug_image(inpainted_image_data, f"inpainted_{task['task_id']}.png")
+        inpainted_width, inpainted_height = get_image_dimensions(inpainted_image_data)
+        logger.info(f"重绘后图片尺寸: {inpainted_width}x{inpainted_height}")
+
+    return {
+        "inpainted_image": f"data:image/png;base64,{inpainted_image}",
+        "message": "图片重绘完成"
+    }
 
 if __name__ == '__main__':
     logger.info("启动服务器")

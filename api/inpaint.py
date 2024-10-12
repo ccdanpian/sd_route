@@ -108,9 +108,9 @@ def inpaint_image(original_image_path, mask_image_path, prompt, output_path, mod
     logger.info("图片修复完成")
 
 # 示例调用
-original_image = "11.png"  # 原始图像路径
-mask_image = "mask.png"        # 蒙版图像路径（白色区域为需要重绘部分）
-prompt_text = "a dog with red eyes"        # 提示词
+original_image = "33.png"  # 原始图像路径
+mask_image = "mask3.png"        # 蒙版图像路径（白色区域为需要重绘部分）
+prompt_text = "a cat with red hat"        # 提示词
 output_image = "inpaint_result.png"          # 输出图像路径
 model_name = "realisticVisionV51_v51VAE.safetensors"  # 替换为你想使用的模型名称
 

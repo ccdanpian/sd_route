@@ -5,6 +5,7 @@ let isDrawing = false;
 let originalImageData = null;
 let drawMode = 'rectangle';
 let startX, startY;
+let originalImage = null; // 新增全局变量来存储真正的原始图片
 
 const apiUrl = window.location.origin;
 
@@ -43,7 +44,7 @@ export function openPreviewWindow(src, taskId) {
     promptInput.style.width = '300px';
     promptInput.style.marginRight = '10px';
 
-    const sendButton = createButton('发送���绘', () => sendMaskedImage(taskId, promptInput.value));
+    const sendButton = createButton('发送绘', () => sendMaskedImage(taskId, promptInput.value));
 
     promptContainer.appendChild(promptInput);
     promptContainer.appendChild(sendButton);
@@ -76,7 +77,8 @@ export function openPreviewWindow(src, taskId) {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0);
         originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        maskImage = document.createElement('canvas');
+        originalImage = img; // 保存真正的原始图片
+        maskImage = document.createElement('canvas');  // 使用全局变量 maskImage
         maskImage.width = canvas.width;
         maskImage.height = canvas.height;
         resetMask();
@@ -178,6 +180,10 @@ function toggleDrawMode() {
 }
 
 function resetMask() {
+    if (!maskImage) {
+        console.error('maskImage is not initialized');
+        return;
+    }
     const maskCtx = maskImage.getContext('2d');
     maskCtx.fillStyle = 'black';
     maskCtx.fillRect(0, 0, maskImage.width, maskImage.height);
@@ -187,8 +193,22 @@ function resetMask() {
 }
 
 async function sendMaskedImage(taskId, inpaintPrompt) {
-    const canvas = document.getElementById('editCanvas');
-    const maskedImageData = canvas.toDataURL('image/png').split(',')[1];
+    if (!maskImage || !originalImage) {
+        console.error('maskImage or originalImage is not initialized');
+        updateStatus("重绘失败：图像未初始化");
+        return;
+    }
+
+    // 获取真正的原始图片数据
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = originalImage.width;
+    tempCanvas.height = originalImage.height;
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCtx.drawImage(originalImage, 0, 0);
+    const originalImageData = tempCanvas.toDataURL('image/png');
+
+    // 获取遮罩图片数据
+    const maskedImageData = maskImage.toDataURL('image/png');
     
     try {
         const response = await fetch(`${apiUrl}/sd/inpaint`, {
@@ -196,7 +216,8 @@ async function sendMaskedImage(taskId, inpaintPrompt) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 taskId: taskId,
-                maskedImage: maskedImageData,
+                original_image: originalImageData,
+                mask_image: maskedImageData,
                 prompt: inpaintPrompt
             })
         });
