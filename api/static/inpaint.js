@@ -6,6 +6,8 @@ let originalImageData = null;
 let drawMode = 'rectangle';
 let startX, startY;
 
+const apiUrl = window.location.origin;
+
 export function openPreviewWindow(src, taskId) {
     // 使用传入的 taskId，而不是全局变量
     
@@ -29,6 +31,23 @@ export function openPreviewWindow(src, taskId) {
     canvas.style.maxHeight = '70%';
     canvas.style.border = '1px solid #ccc';
 
+    const promptContainer = document.createElement('div');
+    promptContainer.style.display = 'flex';
+    promptContainer.style.alignItems = 'center';
+    promptContainer.style.marginBottom = '10px';
+
+    const promptInput = document.createElement('input');
+    promptInput.type = 'text';
+    promptInput.placeholder = '输入重绘 prompt';
+    promptInput.style.padding = '5px';
+    promptInput.style.width = '300px';
+    promptInput.style.marginRight = '10px';
+
+    const sendButton = createButton('发送���绘', () => sendMaskedImage(taskId, promptInput.value));
+
+    promptContainer.appendChild(promptInput);
+    promptContainer.appendChild(sendButton);
+
     const buttonContainer = document.createElement('div');
     buttonContainer.style.marginTop = '20px';
     buttonContainer.style.display = 'flex';
@@ -37,13 +56,14 @@ export function openPreviewWindow(src, taskId) {
     const closeButton = createButton('关闭', () => document.body.removeChild(previewWindow));
     const toggleModeButton = createButton('切换绘制模式', toggleDrawMode);
     const resetButton = createButton('重置蒙版', resetMask);
-    const sendButton = createButton('发送重绘', () => sendMaskedImage(taskId));  // 传递 taskId
+    const saveMaskButton = createButton('保存蒙版', saveMask);
 
     buttonContainer.appendChild(closeButton);
     buttonContainer.appendChild(toggleModeButton);
     buttonContainer.appendChild(resetButton);
-    buttonContainer.appendChild(sendButton);
+    buttonContainer.appendChild(saveMaskButton);
 
+    previewWindow.appendChild(promptContainer);
     previewWindow.appendChild(canvas);
     previewWindow.appendChild(buttonContainer);
 
@@ -81,6 +101,17 @@ function startDrawing(e) {
     const rect = e.target.getBoundingClientRect();
     startX = e.clientX - rect.left;
     startY = e.clientY - rect.top;
+
+    const canvas = document.getElementById('editCanvas');
+    const ctx = canvas.getContext('2d');
+    const maskCtx = maskImage.getContext('2d');
+
+    if (drawMode === 'freeform') {
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        maskCtx.beginPath();
+        maskCtx.moveTo(startX, startY);
+    }
 }
 
 function draw(e) {
@@ -91,25 +122,31 @@ function draw(e) {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    ctx.putImageData(originalImageData, 0, 0);
     const maskCtx = maskImage.getContext('2d');
 
     if (drawMode === 'rectangle') {
+        ctx.putImageData(originalImageData, 0, 0);
         ctx.strokeStyle = 'white';
         ctx.strokeRect(startX, startY, x - startX, y - startY);
     } else {
-        maskCtx.strokeStyle = 'white';
-        maskCtx.lineWidth = 5;
+        // 在 maskImage 上绘制
         maskCtx.lineTo(x, y);
         maskCtx.stroke();
+        
+        // 在 canvas 上实时显示轨迹
+        ctx.putImageData(originalImageData, 0, 0);
+        ctx.globalAlpha = 0.5;
+        ctx.drawImage(maskImage, 0, 0);
+        ctx.globalAlpha = 1.0;
+        
+        // 在 canvas 上绘制当前笔画
+        ctx.strokeStyle = 'white';
+        ctx.lineTo(x, y);
+        ctx.stroke();
     }
-
-    ctx.globalAlpha = 0.5;
-    ctx.drawImage(maskImage, 0, 0);
-    ctx.globalAlpha = 1.0;
 }
 
-function stopDrawing() {
+function stopDrawing(e) {
     if (!isDrawing) return;
     isDrawing = false;
     const canvas = document.getElementById('editCanvas');
@@ -118,13 +155,16 @@ function stopDrawing() {
 
     if (drawMode === 'rectangle') {
         const rect = canvas.getBoundingClientRect();
-        const endX = event.clientX - rect.left;
-        const endY = event.clientY - rect.top;
+        const endX = e.clientX - rect.left;
+        const endY = e.clientY - rect.top;
         maskCtx.fillStyle = 'white';
         maskCtx.fillRect(startX, startY, endX - startX, endY - startY);
+    } else {
+        maskCtx.closePath();
+        maskCtx.fillStyle = 'white';
+        maskCtx.fill();
     }
 
-    maskCtx.beginPath();
     ctx.putImageData(originalImageData, 0, 0);
     ctx.globalAlpha = 0.5;
     ctx.drawImage(maskImage, 0, 0);
@@ -146,42 +186,31 @@ function resetMask() {
     ctx.putImageData(originalImageData, 0, 0);
 }
 
-async function sendMaskedImage(taskId) {
+async function sendMaskedImage(taskId, inpaintPrompt) {
     const canvas = document.getElementById('editCanvas');
     const maskedImageData = canvas.toDataURL('image/png').split(',')[1];
-    const promptInput = document.createElement('input');
-    promptInput.type = 'text';
-    promptInput.placeholder = '输入重绘 prompt';
-    document.body.appendChild(promptInput);
+    
+    try {
+        const response = await fetch(`${apiUrl}/sd/inpaint`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                taskId: taskId,
+                maskedImage: maskedImageData,
+                prompt: inpaintPrompt
+            })
+        });
 
-    promptInput.addEventListener('keyup', async (event) => {
-        if (event.key === 'Enter') {
-            const inpaintPrompt = promptInput.value;
-            document.body.removeChild(promptInput);
-
-            try {
-                const response = await fetch(`${apiUrl}/sd/inpaint`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        taskId: taskId,  // 使用传入的 taskId
-                        maskedImage: maskedImageData,
-                        prompt: inpaintPrompt
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const result = await response.json();
-                displayInpaintedImage(result);
-            } catch (error) {
-                console.error('Error:', error);
-                updateStatus("重绘失败：" + error.message);
-            }
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
-    });
+
+        const result = await response.json();
+        displayInpaintedImage(result);
+    } catch (error) {
+        console.error('Error:', error);
+        updateStatus("重绘失败：" + error.message);
+    }
 }
 
 function displayInpaintedImage(result) {
@@ -192,6 +221,13 @@ function displayInpaintedImage(result) {
     
     const sdResultContainer = document.getElementById('sd-result-container');
     sdResultContainer.appendChild(inpaintedImg);
+}
+
+function saveMask() {
+    const link = document.createElement('a');
+    link.download = 'mask.png';
+    link.href = maskImage.toDataURL('image/png');
+    link.click();
 }
 
 // 确保正确导出 openPreviewWindow 函数
