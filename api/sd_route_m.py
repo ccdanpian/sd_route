@@ -323,45 +323,47 @@ def generate():
             return jsonify({"error": "提示词可能包含不适当的内容。请修改后重试。"}), 400
 
         translated_prompt = translate_to_english(prompt)
+
+        # 构建模型参数
+        model_params = SD_MODEL
+        if data.get('lora', False):
+            lora_name = data.get('lora_name', '')
+            lora_weight = data.get('lora_weight', 0.7)  # 默认权重为0.7
+            model_params += f"<lora:{lora_name}:{lora_weight}>"
+            # 将 lora 信息添加到 prompt 中
+            translated_prompt += f", <lora:{lora_name}:{lora_weight}>"
+
+        task_id = str(uuid4())
+
+        task = {
+            'task_id': task_id,
+            'model': model_params,
+            'prompt': translated_prompt,
+            'negative_prompt': data.get('negative_prompt', 'NSFW'),
+            'width': data.get('width', 512),
+            'height': data.get('height', 512),
+            'num_images': data.get('num_images', 1),
+            'seed': data.get('seed', -1),
+            'ip_address': ip_address
+        }
+
+        if task_queue.qsize() >= MAX_QUEUE_SIZE:
+            if ENABLE_IP_RESTRICTION:
+                with ip_lock:
+                    del active_ip_requests[ip_address]
+            return jsonify({"error": "队列已满，请稍后再试"}), 429
+
+        queue_position = task_queue.qsize()
+        task_queue.put(task)
+        task_status[task_id] = {"status": "排队中" if queue_position > 0 else "处理中", "progress": 0, "queuePosition": queue_position}
+
+        if queue_position == 0:
+            threading.Thread(target=process_task, args=(task, phone_number, ip_address)).start()
+
+        return jsonify({"task_id": task_id, "queuePosition": queue_position})
     except Exception as e:
         logger.error(f"处理提示词时出错: {str(e)}")
         return jsonify({"error": "处理提示词时出现错误，请稍后重试。"}), 500
-
-    task_id = str(uuid4())
-    
-    # 构建模型参数
-    model_params = SD_MODEL
-    if data.get('lora', False):
-        lora_name = data.get('lora_name', '')
-        lora_weight = data.get('lora_weight', 0.7)  # 默认权重为0.7
-        model_params += f"<lora:{lora_name}:{lora_weight}>"
-
-    task = {
-        'task_id': task_id,
-        'model': model_params,
-        'prompt': translated_prompt,
-        'negative_prompt': data.get('negative_prompt', 'NSFW'),
-        'width': data.get('width', 512),
-        'height': data.get('height', 512),
-        'num_images': data.get('num_images', 1),
-        'seed': data.get('seed', -1),
-        'ip_address': ip_address
-    }
-
-    if task_queue.qsize() >= MAX_QUEUE_SIZE:
-        if ENABLE_IP_RESTRICTION:
-            with ip_lock:
-                del active_ip_requests[ip_address]
-        return jsonify({"error": "队列已满，请稍后再试"}), 429
-
-    queue_position = task_queue.qsize()
-    task_queue.put(task)
-    task_status[task_id] = {"status": "排队中" if queue_position > 0 else "处理中", "progress": 0, "queuePosition": queue_position}
-
-    if queue_position == 0:
-        threading.Thread(target=process_task, args=(task, phone_number, ip_address)).start()
-
-    return jsonify({"task_id": task_id, "queuePosition": queue_position})
 
 @app.route('/sd/status/<task_id>', methods=['GET'])
 def get_status(task_id):
