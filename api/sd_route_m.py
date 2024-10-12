@@ -105,7 +105,38 @@ def update_task_status(task_id, status, progress, **kwargs):
         }
     # logger.info(f"任务 {task_id} 状态更新: {status}, 进度: {progress}%")
 
+def set_model_and_lora(task):
+    options_payload = {
+        "sd_model_checkpoint": SD_MODEL,
+    }
+    
+    if "<lora:" in task['model']:
+        lora_info = task['model'].split("<lora:")[1].split(">")[0]
+        lora_name, lora_weight = lora_info.split(":")
+        if not lora_name.endswith('.safetensors'):
+            lora_name += '.safetensors'
+        options_payload["sd_lora"] = f"{lora_name}:{lora_weight}"
+    
+    options_url = f"{SD_URL}/sdapi/v1/options"
+    try:
+        logger.info(f"设置模型和LoRA: {options_payload}")
+        options_response = requests.post(url=options_url, json=options_payload, verify=False, timeout=30)
+        options_response.raise_for_status()
+        logger.info("成功设置模型和LoRA")
+        
+        # 添加3秒延迟
+        logger.info("等待3秒钟以确保设置生效...")
+        time.sleep(3)
+        logger.info("延迟结束，继续处理")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"设置模型和LoRA失败: {str(e)}")
+        raise Exception(f"设置模型和LoRA失败: {str(e)}")
+
 def generate_images(task):
+    # 首先设置模型和LoRA
+    set_model_and_lora(task)
+
+    # 然后生成图像
     payload = {
         "prompt": task['prompt'],
         "negative_prompt": task['negative_prompt'],
@@ -117,19 +148,7 @@ def generate_images(task):
         "height": task['height'],
         "seed": task['seed'],
         "batch_size": task['num_images'],
-        "override_settings": {
-            "sd_model_checkpoint": SD_MODEL,
-        }
     }
-
-    # 如果model参数包含Lora信息，添加到override_settings中
-    if "<lora:" in task['model']:
-        lora_info = task['model'].split("<lora:")[1].split(">")[0]
-        lora_name, lora_weight = lora_info.split(":")
-        # 添加 .safetensors 后缀，如果 lora_name 中没有的话
-        if not lora_name.endswith('.safetensors'):
-            lora_name += '.safetensors'
-        payload["override_settings"]["sd_lora"] = f"{lora_name}:{lora_weight}"
 
     logger.debug(f"Payload: {json.dumps(payload, indent=2)}")
 
