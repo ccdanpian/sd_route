@@ -37,6 +37,7 @@ CHATGPT_MODEL = os.getenv('CHATGPT_MODEL', 'gpt-4o-mini-2024-07-18')
 CONTENT_REVIEW_PROMPT = os.getenv('CONTENT_REVIEW_PROMPT', '你是一个内容审核助手。请判断以下提示词是否包含身体敏感部位未被遮挡、或中国国家领导人信息。只回答“是”或“否”，不要解释。')
 # 新增环境变量引入
 MAX_QUEUE_SIZE = int(os.getenv('MAX_QUEUE_SIZE', '3'))
+SD_MODEL = os.getenv('SD_MODEL', 'v1-5-pruned-emaonly.safetensors')  # 从.env文件中获取大模型名称
 
 if not OPENAI_API_KEY:
     raise ValueError("请设置 OPENAI_API_KEY 环境变量")
@@ -76,9 +77,7 @@ def process_task(task, phone_number, ip_address):
     task_id = task['task_id']
     update_task_status(task_id, "处理中", 0)
     try:
-        # 创建一个不包含 ip_address 的任务副本
-        task_copy = {k: v for k, v in task.items() if k != 'ip_address'}
-        seeds, file_names, save_time = generate_images(**task_copy, phone_number=phone_number)
+        seeds, file_names, save_time = generate_images(task)
         update_task_status(task_id, "完成", 100, seeds=seeds, file_names=file_names, translated_prompt=task['prompt'], phone_number=phone_number, save_time=save_time)
     except Exception as e:
         logger.error(f"处理任务 {task_id} 时出错: {str(e)}")
@@ -106,27 +105,35 @@ def update_task_status(task_id, status, progress, **kwargs):
         }
     # logger.info(f"任务 {task_id} 状态更新: {status}, 进度: {progress}%")
 
-def generate_images(task_id, model, prompt, negative_prompt, width, height, num_images, seed, phone_number):
-    # if seed == -1:
-    #     seed = random.randint(0, 2**32 - 1)
-
+def generate_images(task):
     payload = {
-        "prompt": prompt,
-        "negative_prompt": negative_prompt,
+        "prompt": task['prompt'],
+        "negative_prompt": task['negative_prompt'],
         "steps": 30,
         "sampler_name": "Euler",
         "scheduler": "Simple",
         "cfg_scale": 1,
-        "width": width,
-        "height": height,
-        "seed": seed,
-        "batch_size": num_images,
-        "model": model,
+        "width": task['width'],
+        "height": task['height'],
+        "seed": task['seed'],
+        "batch_size": task['num_images'],
+        "override_settings": {
+            "sd_model_checkpoint": SD_MODEL,
+        }
     }
+
+    # 如果model参数包含Lora信息，添加到override_settings中
+    if "<lora:" in task['model']:
+        lora_info = task['model'].split("<lora:")[1].split(">")[0]
+        lora_name, lora_weight = lora_info.split(":")
+        # 添加 .safetensors 后缀，如果 lora_name 中没有的话
+        if not lora_name.endswith('.safetensors'):
+            lora_name += '.safetensors'
+        payload["override_settings"]["sd_lora"] = f"{lora_name}:{lora_weight}"
 
     logger.debug(f"Payload: {json.dumps(payload, indent=2)}")
 
-    update_task_status(task_id, f"正在使用模型 {model} 生成图片...", 0)
+    update_task_status(task['task_id'], f"正在使用模型 {SD_MODEL} 生成图片...", 0)
     try:
         logger.info(f"发送请求到 {SD_URL}/sdapi/v1/txt2img")
         response = requests.post(url=f'{SD_URL}/sdapi/v1/txt2img', json=payload, verify=False, timeout=120)
@@ -148,22 +155,22 @@ def generate_images(task_id, model, prompt, negative_prompt, width, height, num_
             logger.error("无法解析 'info' 字符串为 JSON")
             info = {}
 
-    seeds = info.get('all_seeds', [seed] * num_images)
+    seeds = info.get('all_seeds', [task['seed']] * task['num_images'])
     images = r['images']
     logger.info(f"生成的图片数量: {len(images)}")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    task_output_dir = os.path.join(OUTPUT_DIR, task_id)
+    task_output_dir = os.path.join(OUTPUT_DIR, task['task_id'])
     os.makedirs(task_output_dir, exist_ok=True)
 
     saved_files = []
     ai_response_content = '### 生成的图片\n\n'
-    ai_response_content += f'**Prompt:** {prompt}\n\n'
+    ai_response_content += f'**Prompt:** {task["prompt"]}\n\n'
     ai_response_content += '<div class="container_sd">\n'
 
     for i, img_data in enumerate(images):
-        progress = int((i + 1) / num_images * 100)
-        update_task_status(task_id, f"处理图片 {i+1}/{num_images}", progress)
+        progress = int((i + 1) / task['num_images'] * 100)
+        update_task_status(task['task_id'], f"处理图片 {i+1}/{task['num_images']}", progress)
 
         if not isinstance(img_data, str) or not img_data.strip():
             logger.warning(f"图片 {i+1} 的数据无效")
@@ -172,12 +179,12 @@ def generate_images(task_id, model, prompt, negative_prompt, width, height, num_
         try:
             image_data = base64.b64decode(img_data)
             image = Image.open(io.BytesIO(image_data))
-            file_name = f"{timestamp}_{model}_{seeds[i]}.png"
+            file_name = f"{timestamp}_{task['model']}_{seeds[i]}.png"
             file_path = os.path.join(task_output_dir, file_name)
             image.save(file_path)
             saved_files.append(file_name)
 
-            relative_path = f"/images/sd/{task_id}/{file_name}"
+            relative_path = f"/images/sd/{task['task_id']}/{file_name}"
             ai_response_content += f'<img src="{relative_path}" alt="Generated image {i+1}">\n'
 
             logger.info(f"图片 {i+1} 已保存")
@@ -205,7 +212,7 @@ def generate_images(task_id, model, prompt, negative_prompt, width, height, num_
     # except Exception as e:
     #     logger.error(f"保存到数据库时出错: {str(e)}")
 
-    update_task_status(task_id, "所有图片生成完成", 100)
+    update_task_status(task['task_id'], "所有图片生成完成", 100)
     return seeds, saved_files, new_topic_start_time
 
 def check_prompt_with_chatgpt(prompt):
@@ -302,16 +309,24 @@ def generate():
         return jsonify({"error": "处理提示词时出现错误，请稍后重试。"}), 500
 
     task_id = str(uuid4())
+    
+    # 构建模型参数
+    model_params = SD_MODEL
+    if data.get('lora', False):
+        lora_name = data.get('lora_name', '')
+        lora_weight = data.get('lora_weight', 0.7)  # 默认权重为0.7
+        model_params += f"<lora:{lora_name}:{lora_weight}>"
+
     task = {
         'task_id': task_id,
-        'model': data.get('model', 'realisticVisionV51_v51VAE.safetensors'),
+        'model': model_params,
         'prompt': translated_prompt,
         'negative_prompt': data.get('negative_prompt', 'NSFW'),
         'width': data.get('width', 512),
         'height': data.get('height', 512),
         'num_images': data.get('num_images', 1),
         'seed': data.get('seed', -1),
-        'ip_address': ip_address  # 保留 IP 地址在任务信息中
+        'ip_address': ip_address
     }
 
     if task_queue.qsize() >= MAX_QUEUE_SIZE:
