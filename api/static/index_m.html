@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flux dev</title>
     <link rel="stylesheet" href="/static/sd_style.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>😺</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%20>😺</text></svg>">
 </head>
 <body>
     <div class="container">
@@ -22,10 +22,11 @@
                         <option value="flux_lora_childbook">flux_lora_childbook</option>
                         <option value="flux_lora_one_click_creative">flux_lora_one_click_creative</option>
                     </select>
-                    <input type="number" id="sd-lora-weight" value="1.0" min="0.1" max="2.0" step="0.1" placeholder="Lora权重">
+                    <input type="number" id="sd-lora-weight" value="1.0" min="0.1" max="2.0" step="0.01" placeholder="Lora权重">
                     <select id="sd-size">
                         <option value="512x512">512x512</option>
                         <option value="768x512">768x512</option>
+                        <option value="920x512">920x512</option>
                         <option value="512x768">512x768</option>
                         <option value="512x920">512x920</option>
                         <option value="1024x1024">1024x1024</option>
