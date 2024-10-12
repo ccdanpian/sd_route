@@ -28,7 +28,7 @@ app = Flask(__name__)
 
 # 从环境变量获取配置
 load_dotenv()
-SD_URL = os.getenv('SD_URL', 'https://127.0.0.1:7861')
+SD_URL = os.getenv('SD_URL', 'https://127.0.0.1:7860')
 OUTPUT_DIR = os.getenv('SD_OUTPUT_DIR', 'output')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 OPENAI_API_BASE = os.getenv('OPENAI_API_BASE')
@@ -107,13 +107,13 @@ def update_task_status(task_id, status, progress, **kwargs):
     # logger.info(f"任务 {task_id} 状态更新: {status}, 进度: {progress}%")
 
 def generate_images(task_id, model, prompt, negative_prompt, width, height, num_images, seed, phone_number):
-    if seed == -1:
-        seed = random.randint(0, 2**32 - 1)
+    # if seed == -1:
+    #     seed = random.randint(0, 2**32 - 1)
 
     payload = {
         "prompt": prompt,
         "negative_prompt": negative_prompt,
-        "steps": 20,
+        "steps": 30,
         "sampler_name": "Euler",
         "scheduler": "Simple",
         "cfg_scale": 1,
@@ -304,9 +304,9 @@ def generate():
     task_id = str(uuid4())
     task = {
         'task_id': task_id,
-        'model': data.get('model', 'v1-5-pruned-emaonly.safetensors'),
+        'model': data.get('model', 'realisticVisionV51_v51VAE.safetensors'),
         'prompt': translated_prompt,
-        'negative_prompt': data.get('negative_prompt', ''),
+        'negative_prompt': data.get('negative_prompt', 'NSFW'),
         'width': data.get('width', 512),
         'height': data.get('height', 512),
         'num_images': data.get('num_images', 1),

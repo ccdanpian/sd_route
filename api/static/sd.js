@@ -1,4 +1,11 @@
-const apiUrl = '';  // Replace with your server address
+// import { openPreviewWindow } from './inpaint.js';
+
+// 确保正确导入 openPreviewWindow 函数
+import { openPreviewWindow } from './inpaint.js';
+
+// 如果 apiUrl 是在 sd.js 中定义的，需要导出它以供 inpaint.js 使用
+export const apiUrl = '';  // 替换为实际的 API URL
+
 const DEBUG_MODE = false;  // 设置为 true 开启调试模式
 let currentTaskId = null;
 let taskQueue = [];
@@ -217,6 +224,7 @@ function displayImages(taskId, fileNames, seeds, translatedPrompt) {
         img.alt = '生成的图像';
         img.className = 'sd-image';
         img.dataset.taskId = taskId;
+        img.addEventListener('click', () => openPreviewWindow(img.src, taskId));
 
         const seedInfo = document.createElement('div');
         seedInfo.textContent = `种子：${seeds[index]}`;
