@@ -31,25 +31,34 @@ async function generateImages() {
         return;
     }
     generateBtn.disabled = true;
-    clearPreviousImages();  // 确保这个函数在这里调用
+    clearPreviousImages();
 
     const [width, height] = document.getElementById('sd-size').value.split('x').map(Number);
+    const loraValue = document.getElementById('sd-lora').value;
 
     const params = {
-        model: document.getElementById('sd-model').value,
         prompt: document.getElementById('sd-prompt').value,
-        negative_prompt: "NSFW",  // Default negative prompt
+        negative_prompt: "NSFW",  // 默认负面提示词
         width: width,
         height: height,
         num_images: parseInt(document.getElementById('sd-num-images').value),
         seed: parseInt(document.getElementById('sd-seed').value),
+        lora: loraValue !== "",  // 布尔值，表示是否使用Lora
+        lora_name: loraValue,  // Lora的名称
+        lora_weight: parseFloat(document.getElementById('sd-lora-weight').value)  // Lora权重
     };
+
+    // 如果没有选择Lora，则删除相关参数
+    if (!params.lora) {
+        delete params.lora_name;
+        delete params.lora_weight;
+    }
 
     try {
         updateStatus("正在提交任务...");
         const response = await fetch(`${apiUrl}/sd/generate`, {
             method: 'POST',
-            credentials: 'include', // 确保跨域请求时携带Cookie
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(params),
         });
