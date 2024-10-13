@@ -74,13 +74,23 @@ def update_queue_positions():
                 task_status[task_id]['queuePosition'] = i
 
 def process_task(task, phone_number, ip_address):
-    global current_task
     task_id = task['task_id']
-    update_task_status(task_id, "处理中", 0)
+    logger.info(f"开始处理任务: task_id={task_id}, type={task['type']}")
+    
     try:
         if task['type'] == 'inpaint':
             result = inpaint_image(task)
-            update_task_status(task_id, "完成", 100, inpainted_image=result['inpainted_image'], message=result['message'])
+            if 'error' in result:
+                logger.error(f"重绘任务 {task_id} 重绘失败: {result['error']}")
+                update_task_status(task_id, f"重绘失败: {result['error']}", 100, phone_number=phone_number)
+            else:
+                logger.info(f"重绘任务 {task_id} 重绘完成")
+                update_task_status(task_id, "重绘完成", 100, 
+                                   inpainted_image_url=result['inpainted_image_url'],
+                                   file_name=result['file_name'],
+                                   save_time=result['save_time'],
+                                   inpaint_prompt=result['inpaint_prompt'],
+                                   phone_number=phone_number)
         elif task['type'] == 'generate':
             seeds, file_names, save_time = generate_images(task)
             update_task_status(task_id, "完成", 100, seeds=seeds, file_names=file_names, translated_prompt=task['prompt'], phone_number=phone_number, save_time=save_time)
@@ -110,7 +120,7 @@ def update_task_status(task_id, status, progress, **kwargs):
             "progress": progress,
             **kwargs
         }
-    # logger.info(f"任务 {task_id} 状态更新: {status}, 进度: {progress}%")
+    logger.info(f"更新任务状态: task_id={task_id}, status={status}, progress={progress}, extra_info={kwargs}")
 
 def set_model_and_lora(task):
     options_payload = {
@@ -388,8 +398,9 @@ def serve_image(task_id, filename):
     return send_from_directory(os.path.join(OUTPUT_DIR, task_id), filename)
 
 # 添加这个新函数到文件中
-def encode_image_to_base64(image_data):
-    return base64.b64encode(image_data).decode('utf-8')
+def encode_image_to_base64(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode('utf-8')
 
 # 假设我们有一个全局变量来控制调试模式
 DEBUG_MODE = True  # 在生产环境中应设置为 False
@@ -441,6 +452,7 @@ def inpaint():
         translated_prompt = translate_to_english(prompt)
 
         task_id = str(uuid4())
+        logger.info(f"创建新的重绘任务: task_id={task_id}")
 
         task = {
             'task_id': task_id,
@@ -472,116 +484,153 @@ def inpaint():
         if queue_position == 0:
             threading.Thread(target=process_task, args=(task, phone_number, ip_address)).start()
 
-        return jsonify({"task_id": task_id, "queuePosition": queue_position})
+        return jsonify({"task_id": task_id, "status": "pending"})
     except Exception as e:
         logger.error(f"处理提示词时出错: {str(e)}")
         return jsonify({"error": "处理提示词时出现错误，请稍后重试。"}), 500
 
+@app.route('/sd/task_status/<task_id>', methods=['GET'])
+def get_task_status(task_id):
+    status = task_status.get(task_id, {"status": "未知任务", "progress": 0})
+    logger.info(f"获取任务状态: task_id={task_id}, status={status}")
+    return jsonify(status)
+
 # 修改 inpaint_image 函数以返回结果而不是直接响应
 def inpaint_image(task):
+    task_id = task['task_id']
+    logger.info(f"开始重绘任务: task_id={task_id}")
+    update_task_status(task_id, "重绘中...", 0)
+    
     prompt = task.get('prompt')
     original_image = task.get('original_image')
     mask_image = task.get('mask_image')
     model_name = task.get('model_name')
 
-    logger.info(f"开始处理重绘任务: task_id={task.get('task_id')}, prompt={prompt}, model_name={model_name}")
+    logger.info(f"开始处理重绘任务: task_id={task_id}, prompt={prompt}, model_name={model_name}")
 
     if not all([prompt, original_image, mask_image, model_name]):
         missing = [k for k, v in {'prompt': prompt, 'original_image': original_image, 
                                   'mask_image': mask_image, 'model_name': model_name}.items() if not v]
         error_msg = f"重绘任务缺少必要参数: {', '.join(missing)}"
         logger.error(error_msg)
-        raise ValueError(error_msg)
+        update_task_status(task_id, "重绘失败", 100, error=error_msg)
+        return {"error": error_msg}
 
-    # 首先设置模型和LoRA
-    set_model_and_lora(task)
+    # 创建临时目录来保存图片
+    temp_dir = f"temp_{task_id}"
+    os.makedirs(temp_dir, exist_ok=True)
 
     try:
-        # 解码图片数据
-        original_image_data = base64.b64decode(original_image.split(',')[1])
-        mask_image_data = base64.b64decode(mask_image.split(',')[1])
+        # 保存原始图片和遮罩图片
+        original_image_path = os.path.join(temp_dir, "original.png")
+        mask_image_path = os.path.join(temp_dir, "mask.png")
 
-        # 保存调试图片
-        save_debug_image(original_image_data, f"original_{task['task_id']}.png")
-        save_debug_image(mask_image_data, f"mask_{task['task_id']}.png")
+        # 从 base64 解码并保存图片
+        with open(original_image_path, "wb") as f:
+            f.write(base64.b64decode(original_image.split(',')[1]))
+        with open(mask_image_path, "wb") as f:
+            f.write(base64.b64decode(mask_image.split(',')[1]))
+
+        # 重新编码图片为 base64
+        original_image_b64 = encode_image_to_base64(original_image_path)
+        mask_image_b64 = encode_image_to_base64(mask_image_path)
 
         # 获取图片尺寸
-        original_width, original_height = get_image_dimensions(original_image_data)
-        mask_width, mask_height = get_image_dimensions(mask_image_data)
-        
+        with Image.open(original_image_path) as img:
+            original_width, original_height = img.size
+
         logger.info(f"原始图片尺寸: {original_width}x{original_height}")
-        logger.info(f"遮罩图片尺寸: {mask_width}x{mask_height}")
 
-        # 编码图片
-        original_image_b64 = base64.b64encode(original_image_data).decode('utf-8')
-        mask_image_b64 = base64.b64encode(mask_image_data).decode('utf-8')
-        
-        logger.info("成功处理原始图片和遮罩图片")
-    except Exception as e:
-        logger.error(f"处理图片数据时出错: {str(e)}")
-        raise
+        update_task_status(task_id, "正在设置模型", 10)
+        # 设置模型和LoRA
+        set_model_and_lora(task)
 
-    # 构建payload
-    payload = {
-        "init_images": [original_image_b64],
-        "mask": mask_image_b64,
-        "prompt": prompt,
-        "negative_prompt": "",
-        "seed": -1,
-        "batch_size": 1,
-        "n_iter": 1,
-        "steps": 30,
-        "cfg_scale": 1,
-        "width": original_width,
-        "height": original_height,
-        "resize_mode": 0,
-        "mask_blur": 4,
-        "inpainting_fill": 1,
-        "inpaint_full_res": True,
-        "inpaint_full_res_padding": 32,
-        "sampler_name": "Euler",
-        "denoising_strength": 0.75,
-        "mask_mode": 0,
-        "inpainting_mask_invert": 0,
-        "override_settings": {
-            "sd_model_checkpoint": model_name
-        },
-        "override_settings_restore_afterwards": True,
-        "script_args": [],
-        "include_init_images": False,
-        "script_name": "",
-        "send_images": True,
-        "save_images": False,
-        "alwayson_scripts": {}
-    }
+        # 构建 payload
+        payload = {
+            "init_images": [original_image_b64],
+            "mask": mask_image_b64,
+            "prompt": prompt,
+            "negative_prompt": "",
+            "seed": -1,
+            "batch_size": 1,
+            "n_iter": 1,
+            "steps": 30,
+            "cfg_scale": 1,
+            "width": original_width,
+            "height": original_height,
+            "resize_mode": 0,
+            "mask_blur": 4,
+            "inpainting_fill": 1,
+            "inpaint_full_res": True,
+            "inpaint_full_res_padding": 32,
+            "sampler_name": "Euler",
+            "sampler_index": "Euler",
+            "scheduler": "Simple",
+            "denoising_strength": 0.75,
+            "mask_mode": 0,
+            "inpainting_mask_invert": 0,
+            "override_settings": {
+                "sd_model_checkpoint": model_name
+            },
+            "override_settings_restore_afterwards": True,
+            "script_args": [],
+            "include_init_images": False,
+            "script_name": "",
+            "send_images": True,
+            "save_images": False,
+            "alwayson_scripts": {}
+        }
 
-    logger.info(f"准备发送重绘请求到 {SD_URL}")
-    try:
+        update_task_status(task_id, "正在发送重绘请求", 30)
+        # 发送请求到 SD API
+        logger.info(f"准备发送重绘请求到 {SD_URL}")
         response = requests.post(url=f'{SD_URL}/sdapi/v1/img2img', json=payload, verify=False, timeout=120)
         response.raise_for_status()
         result = response.json()
-    except requests.exceptions.RequestException as e:
-        logger.error(f"图片重绘请求失败: {str(e)}")
-        raise Exception(f"图片重绘请求失败: {str(e)}")
 
-    if 'images' not in result or not result['images']:
-        logger.error("响应中没有有效的图片数据")
-        raise Exception("响应中没有有效的图片数据")
+        if 'images' not in result or not result['images']:
+            raise Exception("响应中没有有效的图片数据")
 
-    inpainted_image = result['images'][0]
-    logger.info("图片重绘成功完成")
-    
-    # 保存重绘后的图片（仅用于调试）
-    if DEBUG_MODE:
-        inpainted_image_data = base64.b64decode(inpainted_image)
-        save_debug_image(inpainted_image_data, f"inpainted_{task['task_id']}.png")
-        inpainted_width, inpainted_height = get_image_dimensions(inpainted_image_data)
-        logger.info(f"重绘后图片尺寸: {inpainted_width}x{inpainted_height}")
+        update_task_status(task_id, "正在处理重绘结果", 70)
+        inpainted_image = result['images'][0]
+        logger.info("图片重绘成功完成")
 
-    return {
-        "inpainted_image": f"data:image/png;base64,{inpainted_image}",
-        "message": "图片重绘完成"
-    }
+        # 保存重绘后的图片
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_dir = os.path.join(OUTPUT_DIR, task_id)
+        os.makedirs(save_dir, exist_ok=True)
+        file_name = f"{timestamp}_inpaint.png"
+        save_path = os.path.join(save_dir, file_name)
+        
+        with open(save_path, "wb") as f:
+            f.write(base64.b64decode(inpainted_image))
+
+        logger.info(f"重绘图片已保存: {save_path}")
+
+        # 构建图片URL
+        image_url = f"/images/sd/{task_id}/{file_name}"
+
+        logger.info(f"重绘任务完成: task_id={task_id}")
+        update_task_status(task_id, "重绘完成", 100, inpainted_image_url=image_url)
+
+        return {
+            "inpainted_image_url": image_url,
+            "message": "图片重绘完成",
+            "file_name": file_name,
+            "save_time": timestamp,
+            "inpaint_prompt": task['prompt']  # 添加这行
+        }
+
+    except Exception as e:
+        error_msg = f"处理重绘任务时出错: {str(e)}"
+        logger.error(f"{error_msg} task_id={task_id}")
+        update_task_status(task_id, "重绘失败", 100, error=error_msg)
+        return {"error": error_msg}
+    finally:
+        # 清理临时文件
+        for file in os.listdir(temp_dir):
+            os.remove(os.path.join(temp_dir, file))
+        os.rmdir(temp_dir)
 
 if __name__ == '__main__':
     logger.info("启动服务器")

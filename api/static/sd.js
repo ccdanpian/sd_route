@@ -216,17 +216,34 @@ function displayImages(taskId, fileNames, seeds, translatedPrompt) {
     const sdResultContainer = document.getElementById('sd-result-container');
     sdResultContainer.innerHTML = ''; // Clear previous results
 
+    // 创建提示词元素
     const promptElement = document.createElement('p');
-    promptElement.textContent = translatedPrompt;
+    promptElement.textContent = `提示词：${translatedPrompt}`;
+    promptElement.style.textAlign = 'left';
+    promptElement.style.marginBottom = '10px';
     sdResultContainer.appendChild(promptElement);
+
+    // 创建种子信息元素
+    const seedInfo = document.createElement('p');
+    seedInfo.textContent = `种子：${seeds.join(', ')}`;
+    seedInfo.style.textAlign = 'left';
+    seedInfo.style.marginBottom = '10px';
+    sdResultContainer.appendChild(seedInfo);
 
     const imageContainer = document.createElement('div');
     imageContainer.className = 'container_images_sd';
     imageContainer.dataset.taskId = taskId;
+    imageContainer.style.display = 'flex';
+    imageContainer.style.flexWrap = 'wrap';
+    imageContainer.style.justifyContent = 'flex-start'; // 改为左对齐
+    imageContainer.style.gap = '10px';
 
     fileNames.forEach((fileName, index) => {
         const imageWrapper = document.createElement('div');
         imageWrapper.className = 'image-wrapper';
+        imageWrapper.style.display = 'flex';
+        imageWrapper.style.flexDirection = 'column';
+        imageWrapper.style.alignItems = 'center';
 
         const img = document.createElement('img');
         img.src = `${apiUrl}/images/sd/${taskId}/${fileName}`;
@@ -234,12 +251,10 @@ function displayImages(taskId, fileNames, seeds, translatedPrompt) {
         img.className = 'sd-image';
         img.dataset.taskId = taskId;
         img.addEventListener('click', () => openPreviewWindow(img.src, taskId));
-
-        const seedInfo = document.createElement('div');
-        seedInfo.textContent = `种子：${seeds[index]}`;
+        img.style.maxWidth = '100%';
+        img.style.height = 'auto';
 
         imageWrapper.appendChild(img);
-        imageWrapper.appendChild(seedInfo);
         imageContainer.appendChild(imageWrapper);
     });
 
