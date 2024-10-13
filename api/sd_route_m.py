@@ -225,7 +225,7 @@ def generate_images(task):
 
             # logger.info(f"图片 {i+1} 已保存")
         except Exception as e:
-            # logger.error(f"处理图片 {i+1} 时出错: {str(e)}")
+            logger.error(f"处理图片 {i+1} 时出错: {str(e)}")
 
     ai_response_content += '</div>\n\n'
     ai_response_content += f'**Seeds:** {", ".join(map(str, seeds))}\n\n'
