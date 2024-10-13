@@ -75,16 +75,16 @@ def update_queue_positions():
 
 def process_task(task, phone_number, ip_address):
     task_id = task['task_id']
-    logger.info(f"开始处理任务: task_id={task_id}, type={task['type']}")
+    # logger.info(f"开始处理任务: task_id={task_id}, type={task['type']}")
     
     try:
         if task['type'] == 'inpaint':
             result = inpaint_image(task)
             if 'error' in result:
-                logger.error(f"重绘任务 {task_id} 重绘失败: {result['error']}")
+                # logger.error(f"重绘任务 {task_id} 重绘失败: {result['error']}")
                 update_task_status(task_id, f"重绘失败: {result['error']}", 100, phone_number=phone_number)
             else:
-                logger.info(f"重绘任务 {task_id} 重绘完成")
+                # logger.info(f"重绘任务 {task_id} 重绘完成")
                 update_task_status(task_id, "重绘完成", 100, 
                                    inpainted_image_url=result['inpainted_image_url'],
                                    file_name=result['file_name'],
@@ -120,7 +120,7 @@ def update_task_status(task_id, status, progress, **kwargs):
             "progress": progress,
             **kwargs
         }
-    logger.info(f"更新任务状态: task_id={task_id}, status={status}, progress={progress}, extra_info={kwargs}")
+    # logger.info(f"更新任务状态: task_id={task_id}, status={status}, progress={progress}, extra_info={kwargs}")
 
 def set_model_and_lora(task):
     options_payload = {
@@ -136,17 +136,17 @@ def set_model_and_lora(task):
     
     options_url = f"{SD_URL}/sdapi/v1/options"
     try:
-        logger.info(f"设置模型和LoRA: {options_payload}")
+        # logger.info(f"设置模型和LoRA: {options_payload}")
         options_response = requests.post(url=options_url, json=options_payload, verify=False, timeout=30)
         options_response.raise_for_status()
-        logger.info("成功设置模型和LoRA")
+        # logger.info("成功设置模型和LoRA")
         
         # 添加3秒延迟
-        logger.info("等待3秒钟以确保设置生效...")
+        # logger.info("等待3秒钟以确保设置生效...")
         time.sleep(3)
-        logger.info("延迟结束，继续处理")
+        # logger.info("延迟结束，继续处理")
     except requests.exceptions.RequestException as e:
-        logger.error(f"设置模型和LoRA失败: {str(e)}")
+        # logger.error(f"设置模型和LoRA失败: {str(e)}")
         raise Exception(f"设置模型和LoRA失败: {str(e)}")
 
 def generate_images(task):
@@ -171,16 +171,16 @@ def generate_images(task):
 
     update_task_status(task['task_id'], f"正在使用模型 {SD_MODEL} 生成图片...", 0)
     try:
-        logger.info(f"发送请求到 {SD_URL}/sdapi/v1/txt2img")
+        # logger.info(f"发送请求到 {SD_URL}/sdapi/v1/txt2img")
         response = requests.post(url=f'{SD_URL}/sdapi/v1/txt2img', json=payload, verify=False, timeout=120)
         response.raise_for_status()
         r = response.json()
     except requests.exceptions.RequestException as e:
-        logger.error(f"生成图片请求失败: {str(e)}")
+        # logger.error(f"生成图片请求失败: {str(e)}")
         raise Exception(f"生成图片请求失败: {str(e)}")
 
     if 'images' not in r:
-        logger.error("响应中没有 'images' 键")
+        # logger.error("响应中没有 'images' 键")
         raise Exception("响应中没有 'images' 键")
 
     info = r.get('info', '{}')
@@ -188,12 +188,12 @@ def generate_images(task):
         try:
             info = json.loads(info)
         except json.JSONDecodeError:
-            logger.error("无法解析 'info' 字符串为 JSON")
+            # logger.error("无法解析 'info' 字符串为 JSON")
             info = {}
 
     seeds = info.get('all_seeds', [task['seed']] * task['num_images'])
     images = r['images']
-    logger.info(f"生成的图片数量: {len(images)}")
+    # logger.info(f"生成的图片数量: {len(images)}")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     task_output_dir = os.path.join(OUTPUT_DIR, task['task_id'])
@@ -209,7 +209,7 @@ def generate_images(task):
         update_task_status(task['task_id'], f"处理图片 {i+1}/{task['num_images']}", progress)
 
         if not isinstance(img_data, str) or not img_data.strip():
-            logger.warning(f"图片 {i+1} 的数据无效")
+            # logger.warning(f"图片 {i+1} 的数据无效")
             continue
 
         try:
@@ -223,9 +223,9 @@ def generate_images(task):
             relative_path = f"/images/sd/{task['task_id']}/{file_name}"
             ai_response_content += f'<img src="{relative_path}" alt="Generated image {i+1}">\n'
 
-            logger.info(f"图片 {i+1} 已保存")
+            # logger.info(f"图片 {i+1} 已保存")
         except Exception as e:
-            logger.error(f"处理图片 {i+1} 时出错: {str(e)}")
+            # logger.error(f"处理图片 {i+1} 时出错: {str(e)}")
 
     ai_response_content += '</div>\n\n'
     ai_response_content += f'**Seeds:** {", ".join(map(str, seeds))}\n\n'
@@ -253,7 +253,7 @@ def generate_images(task):
 
 def check_prompt_with_chatgpt(prompt):
     try:
-        logger.info(f"正在检查提示词: {prompt}")
+        # logger.info(f"正在检查提示词: {prompt}")
         response = client.chat.completions.create(
             model=CHATGPT_MODEL,
             messages=[
@@ -261,22 +261,22 @@ def check_prompt_with_chatgpt(prompt):
                 {"role": "user", "content": f"提示词: {prompt}"}
             ]
         )
-        logger.debug(f"ChatGPT API 原始响应: {response}")
+        # logger.debug(f"ChatGPT API 原始响应: {response}")
         
         if not response.choices:
-            logger.error("ChatGPT API 响应中没有选项")
+            # logger.error("ChatGPT API 响应中没有选项")
             return False
 
         result = response.choices[0].message.content.strip().lower()
-        logger.info(f"ChatGPT 审核结果: {result}")
+        # logger.info(f"ChatGPT 审核结果: {result}")
         return result == '是'
     except Exception as e:
-        logger.error(f"ChatGPT API调用错误: {str(e)}")
+        # logger.error(f"ChatGPT API调用错误: {str(e)}")
         return False  # 如果API调用失败，我们假设内容是安全的
 
 def translate_to_english(prompt):
     try:
-        logger.info(f"正在将提示词翻译为英语: {prompt}")
+        # logger.info(f"正在将提示词翻译为英语: {prompt}")
         response = client.chat.completions.create(
             model=CHATGPT_MODEL,
             messages=[
@@ -286,14 +286,14 @@ def translate_to_english(prompt):
         )
         
         if not response.choices:
-            logger.error("ChatGPT API 响应中没有选项")
+            # logger.error("ChatGPT API 响应中没有选项")
             return prompt
 
         translated_prompt = response.choices[0].message.content.strip()
-        logger.info(f"翻译结果: {translated_prompt}")
+        # logger.info(f"翻译结果: {translated_prompt}")
         return translated_prompt
     except Exception as e:
-        logger.error(f"ChatGPT API调用错误: {str(e)}")
+        # logger.error(f"ChatGPT API调用错误: {str(e)}")
         return prompt  # 如果API调用失败，返回原始prompt
 
 @app.route('/')
@@ -308,17 +308,20 @@ def get_client_ip():
     else:
         return request.remote_addr
 
+@app.before_request
+def log_request_info():
+    ip = get_client_ip()
+    logger.info(f'Request from IP: {ip}, Path: {request.path}, Method: {request.method}')
 
-    
 @app.route('/sd/generate', methods=['POST'])
 def generate():
-    logger.info("收到生成图片请求")
+    # logger.info("收到生成图片请求")
     data = request.json
-    logger.debug(f"请求数据: {json.dumps(data, indent=2)}")
+    # logger.debug(f"请求数据: {json.dumps(data, indent=2)}")
 
     # 获取请求的 IP 地址
     ip_address = get_client_ip()
-    logger.info(f"请求 IP 地址: {ip_address}")
+    # logger.info(f"请求 IP 地址: {ip_address}")
 
     # 只在启用 IP 限制时检查
     if ENABLE_IP_RESTRICTION:
@@ -328,7 +331,7 @@ def generate():
             active_ip_requests[ip_address] = True
 
     phone_number = request.cookies.get('phoneNumber')
-    logger.info(f'*****phoneNumber: {phone_number}')
+    # logger.info(f'*****phoneNumber: {phone_number}')
 
     prompt = data.get('prompt', '')
     if not prompt:
@@ -423,13 +426,13 @@ def get_image_dimensions(image_data):
 # 添加新的 inpaint 路由
 @app.route('/sd/inpaint', methods=['POST'])
 def inpaint():
-    logger.info("收到图片重绘请求")
+    # logger.info("收到图片重绘请求")
     data = request.json
-    logger.info(f"请求数据: prompt={data.get('prompt')}, model_name={data.get('model_name')}")
+    # logger.info(f"请求数据: prompt={data.get('prompt')}, model_name={data.get('model_name')}")
 
     # 获取请求的 IP 地址
     ip_address = get_client_ip()
-    logger.info(f"请求 IP 地址: {ip_address}")
+    # logger.info(f"请求 IP 地址: {ip_address}")
 
     # 只在启用 IP 限制时检查
     if ENABLE_IP_RESTRICTION:
@@ -439,7 +442,7 @@ def inpaint():
             active_ip_requests[ip_address] = True
 
     phone_number = request.cookies.get('phoneNumber')
-    logger.info(f'*****phoneNumber: {phone_number}')
+    # logger.info(f'*****phoneNumber: {phone_number}')
 
     prompt = data.get('prompt', '')
     if not prompt:
@@ -453,7 +456,7 @@ def inpaint():
         translated_prompt = translate_to_english(prompt)
 
         task_id = str(uuid4())
-        logger.info(f"创建新的重绘任务: task_id={task_id}")
+        # logger.info(f"创建新的重绘任务: task_id={task_id}")
 
         task = {
             'task_id': task_id,
@@ -468,7 +471,7 @@ def inpaint():
             'ip_address': ip_address
         }
 
-        logger.info(f"********************steps: {task['steps']}")
+        # logger.info(f"********************steps: {task['steps']}")
 
         # 如果有 LoRA 信息，也添加到任务中
         if data.get('lora', False):
@@ -497,13 +500,13 @@ def inpaint():
 @app.route('/sd/task_status/<task_id>', methods=['GET'])
 def get_task_status(task_id):
     status = task_status.get(task_id, {"status": "未知任务", "progress": 0})
-    logger.info(f"获取任务状态: task_id={task_id}, status={status}")
+    # logger.info(f"获取任务状态: task_id={task_id}, status={status}")
     return jsonify(status)
 
 # 修改 inpaint_image 函数以返回结果而不是直接响应
 def inpaint_image(task):
     task_id = task['task_id']
-    logger.info(f"开始重绘任务: task_id={task_id}")
+    # logger.info(f"开始重绘任务: task_id={task_id}")
     update_task_status(task_id, "重绘中...", 0)
     
     prompt = task.get('prompt')
@@ -514,7 +517,7 @@ def inpaint_image(task):
 
     # logger.info(f"######################inpaint steps: {steps}")
 
-    logger.info(f"开始处理重绘任务: task_id={task_id}, prompt={prompt}, model_name={model_name}")
+    # logger.info(f"开始处理重绘任务: task_id={task_id}, prompt={prompt}, model_name={model_name}")
 
     if not all([prompt, original_image, mask_image, model_name]):
         missing = [k for k, v in {'prompt': prompt, 'original_image': original_image, 
@@ -547,7 +550,7 @@ def inpaint_image(task):
         with Image.open(original_image_path) as img:
             original_width, original_height = img.size
 
-        logger.info(f"原始图片尺寸: {original_width}x{original_height}")
+        # logger.info(f"原始图片尺寸: {original_width}x{original_height}")
 
         update_task_status(task_id, "正在设置模型", 10)
         # 设置模型和LoRA
@@ -591,7 +594,7 @@ def inpaint_image(task):
 
         update_task_status(task_id, "正在发送重绘请求", 30)
         # 发送请求到 SD API
-        logger.info(f"准备发送重绘请求到 {SD_URL}")
+        # logger.info(f"准备发送重绘请求到 {SD_URL}")
         response = requests.post(url=f'{SD_URL}/sdapi/v1/img2img', json=payload, verify=False, timeout=120)
         response.raise_for_status()
         result = response.json()
@@ -601,7 +604,7 @@ def inpaint_image(task):
 
         update_task_status(task_id, "正在处理重绘结果", 70)
         inpainted_image = result['images'][0]
-        logger.info("图片重绘成功完成")
+        # logger.info("图片重绘成功完成")
 
         # 保存重绘后的图片
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -613,12 +616,12 @@ def inpaint_image(task):
         with open(save_path, "wb") as f:
             f.write(base64.b64decode(inpainted_image))
 
-        logger.info(f"重绘图片已保存: {save_path}")
+        # logger.info(f"重绘图片已保存: {save_path}")
 
         # 构建图片URL
         image_url = f"/images/sd/{task_id}/{file_name}"
 
-        logger.info(f"重绘任务完成: task_id={task_id}")
+        # logger.info(f"重绘任务完成: task_id={task_id}")
         update_task_status(task_id, "重绘完成", 100, inpainted_image_url=image_url)
 
         return {
@@ -631,7 +634,7 @@ def inpaint_image(task):
 
     except Exception as e:
         error_msg = f"处理重绘任务时出错: {str(e)}"
-        logger.error(f"{error_msg} task_id={task_id}")
+        # logger.error(f"{error_msg} task_id={task_id}")
         update_task_status(task_id, "重绘失败", 100, error=error_msg)
         return {"error": error_msg}
     finally:
