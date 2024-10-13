@@ -157,7 +157,7 @@ def generate_images(task):
     payload = {
         "prompt": task['prompt'],
         "negative_prompt": task['negative_prompt'],
-        "steps": 15,
+        "steps": task['steps'],  # 使用传入的 steps，如果没有则默认为 15
         "sampler_name": "Euler",
         "scheduler": "Simple",
         "cfg_scale": 1,
@@ -354,10 +354,11 @@ def generate():
 
         task = {
             'task_id': task_id,
-            'type': 'generate',  # 添加 type 字段
+            'type': 'generate',
             'model': model_params,
             'prompt': translated_prompt,
             'negative_prompt': data.get('negative_prompt', 'NSFW'),
+            'steps': data.get('steps', 15),  # 添加步数，默认为15
             'width': data.get('width', 512),
             'height': data.get('height', 512),
             'num_images': data.get('num_images', 1),
@@ -458,12 +459,16 @@ def inpaint():
             'task_id': task_id,
             'type': 'inpaint',
             'prompt': translated_prompt,
+            'negative_prompt': data.get('negative_prompt', ''),  # 添加负面提示词
+            'steps': data.get('steps', 30),  # 添加步数，默认为30
             'original_image': data.get('original_image'),
             'mask_image': data.get('mask_image'),
             'model_name': data.get('model_name', "realisticVisionV51_v51VAE.safetensors"),
-            'model': SD_MODEL,  # 添加这行，确保与 generate 任务结构一致
+            'model': SD_MODEL,
             'ip_address': ip_address
         }
+
+        logger.info(f"********************steps: {task['steps']}")
 
         # 如果有 LoRA 信息，也添加到任务中
         if data.get('lora', False):
@@ -505,6 +510,9 @@ def inpaint_image(task):
     original_image = task.get('original_image')
     mask_image = task.get('mask_image')
     model_name = task.get('model_name')
+    steps = min(task.get('steps') + 6, 36)
+
+    # logger.info(f"######################inpaint steps: {steps}")
 
     logger.info(f"开始处理重绘任务: task_id={task_id}, prompt={prompt}, model_name={model_name}")
 
@@ -554,7 +562,7 @@ def inpaint_image(task):
             "seed": -1,
             "batch_size": 1,
             "n_iter": 1,
-            "steps": 30,
+            "steps": steps,  # 使用传入的 steps，如果没有则默认为 30
             "cfg_scale": 1,
             "width": original_width,
             "height": original_height,

@@ -42,6 +42,7 @@ async function generateImages() {
         width: width,
         height: height,
         num_images: parseInt(document.getElementById('sd-num-images').value),
+        steps: parseInt(document.getElementById('sd-steps').value),  // 添加步数参数
         seed: parseInt(document.getElementById('sd-seed').value),
         lora: loraValue !== "",  // 布尔值，表示是否使用Lora
         lora_name: loraValue,  // Lora的名称
@@ -216,31 +217,23 @@ function displayImages(taskId, fileNames, seeds, translatedPrompt) {
     const sdResultContainer = document.getElementById('sd-result-container');
     sdResultContainer.innerHTML = ''; // Clear previous results
 
-    // 创建提示词元素
     const promptElement = document.createElement('p');
-    promptElement.textContent = `提示词：${translatedPrompt}`;
-    promptElement.style.textAlign = 'left';
-    promptElement.style.marginBottom = '10px';
+    promptElement.textContent = translatedPrompt;
     sdResultContainer.appendChild(promptElement);
-
-    // 创建种子信息元素
-    const seedInfo = document.createElement('p');
-    seedInfo.textContent = `种子：${seeds.join(', ')}`;
-    seedInfo.style.textAlign = 'left';
-    seedInfo.style.marginBottom = '10px';
-    sdResultContainer.appendChild(seedInfo);
 
     const imageContainer = document.createElement('div');
     imageContainer.className = 'container_images_sd';
     imageContainer.dataset.taskId = taskId;
+    // 添加 Flexbox 样式
     imageContainer.style.display = 'flex';
     imageContainer.style.flexWrap = 'wrap';
-    imageContainer.style.justifyContent = 'flex-start'; // 改为左对齐
-    imageContainer.style.gap = '10px';
+    imageContainer.style.justifyContent = 'center';
+    imageContainer.style.gap = '10px'; // 设置图片之间的间距
 
     fileNames.forEach((fileName, index) => {
         const imageWrapper = document.createElement('div');
         imageWrapper.className = 'image-wrapper';
+        // 设置图片包装器的样式
         imageWrapper.style.display = 'flex';
         imageWrapper.style.flexDirection = 'column';
         imageWrapper.style.alignItems = 'center';
@@ -251,10 +244,16 @@ function displayImages(taskId, fileNames, seeds, translatedPrompt) {
         img.className = 'sd-image';
         img.dataset.taskId = taskId;
         img.addEventListener('click', () => openPreviewWindow(img.src, taskId));
+        // 设置图片的最大宽度，确保它们不会太大
         img.style.maxWidth = '100%';
         img.style.height = 'auto';
 
+        const seedInfo = document.createElement('div');
+        seedInfo.textContent = `种子：${seeds[index]}`;
+        seedInfo.style.marginTop = '5px'; // 为种子信息添加一些上边距
+
         imageWrapper.appendChild(img);
+        imageWrapper.appendChild(seedInfo);
         imageContainer.appendChild(imageWrapper);
     });
 

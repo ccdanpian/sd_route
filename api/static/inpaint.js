@@ -224,6 +224,8 @@ async function sendMaskedImage(inpaintPrompt) {
     const originalImageData = tempCanvas.toDataURL('image/png');
 
     const maskedImageData = maskImage.toDataURL('image/png');
+
+    // console.log("***steps:", document.getElementById('sd-steps').value);
     
     try {
         const response = await fetch(`${apiUrl}/sd/inpaint`, {
@@ -232,7 +234,8 @@ async function sendMaskedImage(inpaintPrompt) {
             body: JSON.stringify({
                 original_image: originalImageData,
                 mask_image: maskedImageData,
-                prompt: inpaintPrompt
+                prompt: inpaintPrompt,
+                steps: parseInt(document.getElementById('sd-steps').value)
             })
         });
 
@@ -241,7 +244,7 @@ async function sendMaskedImage(inpaintPrompt) {
         }
 
         const result = await response.json();
-        console.log('Inpaint response:', result);  // 添加日志
+        // console.log('Inpaint response:', result);  // 添加日志
         const newTaskId = result.task_id;  // 获取新的 task_id
         if (newTaskId) {
             await pollTaskStatus(newTaskId);
@@ -267,7 +270,7 @@ async function pollTaskStatus(taskId) {
             }
 
             const result = await response.json();
-            console.log(`Task status (attempt ${attempts + 1}):`, result);
+            // console.log(`Task status (attempt ${attempts + 1}):`, result);
 
             if (result.status === '重绘完成') {
                 console.log('重绘任务完成，处理结果');
@@ -284,7 +287,7 @@ async function pollTaskStatus(taskId) {
             }
 
             // 如果任务仍在进行中，更新进度
-            console.log(`重绘进度: ${result.progress}%`);
+            // (`重绘进度: ${result.progress}%`);
             updateStatus(`重绘处理中：${result.status} (${result.progress}%)`);
 
             // 等待一段时间后再次轮询
@@ -304,10 +307,10 @@ async function pollTaskStatus(taskId) {
     updateStatus("重绘失败：任务超时");
 }
 function processTaskResult(result) {
-    console.log('处理重绘任务结果:', result);
+    // console.log('处理重绘任务结果:', result);
     hideLoadingIndicator();
     if (result.inpainted_image_url) {
-        console.log('显示重绘结果图片:', result.inpainted_image_url);
+        // console.log('显示重绘结果图片:', result.inpainted_image_url);
         displayInpaintedImage(result.inpainted_image_url, result.inpaint_prompt);
         updateStatus("重绘完成", 5000);  // 显示5秒
     } else {
@@ -317,8 +320,8 @@ function processTaskResult(result) {
 }
 
 function displayInpaintedImage(imageUrl, inpaintPrompt) {
-    console.log('显示重绘图片:', imageUrl);
-    console.log('重绘提示:', inpaintPrompt);
+    // console.log('显示重绘图片:', imageUrl);
+    // console.log('重绘提示:', inpaintPrompt);
     const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${baseUrl}${imageUrl}`;
     
     // 创建重绘结果容器
@@ -438,7 +441,7 @@ function hideLoadingIndicator() {
 }
 
 function updateStatus(message, duration = 5000) {
-    console.log('更新状态:', message);
+    // console.log('更新状态:', message);
     clearTimeout(statusTimeout);  // 清除之前的定时器
 
     let statusElement = document.getElementById('statusMessage');

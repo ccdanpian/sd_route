@@ -134,3 +134,78 @@ h1 {
 }
 
 /* 调整其他样式以适应新布局 */
+
+.input-group {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.input-group label {
+    flex: 0 0 auto;
+    margin-right: 10px;
+    white-space: nowrap;
+    font-size: 0.9em; /* 调小字体大小 */
+}
+
+.input-group input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 34px; /* 设置输入框高度，与其他输入框一致 */
+    padding: 6px 8px; /* 调整内边距以匹配其他输入框 */
+    box-sizing: border-box; /* 确保padding不会增加总高度 */
+}
+
+/* 确保所有输入框和选择框有相同的高度和内边距 */
+.form-row select,
+.form-row input[type="number"] {
+    height: 36px;
+    padding: 6px 8px;
+    box-sizing: border-box;
+}
+
+@media (max-width: 600px) {
+    .form-row {
+        flex-direction: column;
+    }
+    
+    .input-group {
+        width: 100%;
+    }
+}
+
+.form-row .input-group.custom-input {
+    display: inline-block;
+    margin-right: 10px;
+}
+
+.custom-input-container {
+    display: inline-block;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: white;
+    height: 34px;
+    box-sizing: border-box;
+}
+
+.custom-input-display {
+    display: inline-block;
+    min-width: 70px;
+    height: 100%;
+    padding: 0 8px;
+    outline: none;
+    font-size: 14px;
+    line-height: 34px; /* 设置为与容器高度相同，实现垂直居中 */
+}
+
+/* 确保所有输入框和选择框有相同的样式 */
+.form-row select,
+.form-row input[type="number"],
+.form-row .custom-input-container {
+    height: 34px;
+    padding: 0 8px;
+    box-sizing: border-box;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
