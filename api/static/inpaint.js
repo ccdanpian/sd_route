@@ -105,6 +105,11 @@ export function openPreviewWindow(src, taskId) {
     canvas.addEventListener('mousemove', draw);
     canvas.addEventListener('mouseup', stopDrawing);
     canvas.addEventListener('mouseout', stopDrawing);
+
+    // 添加触摸事件支持
+    canvas.addEventListener('touchstart', handleTouchStart);
+    canvas.addEventListener('touchmove', handleTouchMove);
+    canvas.addEventListener('touchend', handleTouchEnd);
 }
 
 function createButton(text, onClick) {
@@ -117,8 +122,8 @@ function createButton(text, onClick) {
 function startDrawing(e) {
     isDrawing = true;
     const rect = e.target.getBoundingClientRect();
-    startX = e.clientX - rect.left;
-    startY = e.clientY - rect.top;
+    startX = (e.clientX || e.touches[0].clientX) - rect.left;
+    startY = (e.clientY || e.touches[0].clientY) - rect.top;
 
     const canvas = document.getElementById('editCanvas');
     const ctx = canvas.getContext('2d');
@@ -137,8 +142,8 @@ function draw(e) {
     const canvas = document.getElementById('editCanvas');
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = (e.clientX || e.touches[0].clientX) - rect.left;
+    const y = (e.clientY || e.touches[0].clientY) - rect.top;
 
     const maskCtx = maskImage.getContext('2d');
 
@@ -173,8 +178,8 @@ function stopDrawing(e) {
 
     if (drawMode === 'rectangle') {
         const rect = canvas.getBoundingClientRect();
-        const endX = e.clientX - rect.left;
-        const endY = e.clientY - rect.top;
+        const endX = (e.clientX || (e.changedTouches && e.changedTouches[0].clientX)) - rect.left;
+        const endY = (e.clientY || (e.changedTouches && e.changedTouches[0].clientY)) - rect.top;
         maskCtx.fillStyle = 'white';
         maskCtx.fillRect(startX, startY, endX - startX, endY - startY);
     } else {
@@ -464,4 +469,96 @@ function updateStatus(message, duration = 5000) {
             statusElement.style.display = 'none';
         }, 500);  // 等待淡出动画完成后隐藏元素
     }, duration);
+}
+
+function handleTouchStart(e) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const canvas = document.getElementById('editCanvas');
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    startX = (touch.clientX - rect.left) * scaleX;
+    startY = (touch.clientY - rect.top) * scaleY;
+
+    isDrawing = true;
+
+    const ctx = canvas.getContext('2d');
+    const maskCtx = maskImage.getContext('2d');
+
+    if (drawMode === 'freeform') {
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        maskCtx.beginPath();
+        maskCtx.moveTo(startX, startY);
+    }
+}
+
+function handleTouchMove(e) {
+    e.preventDefault();
+    if (!isDrawing) return;
+
+    const touch = e.touches[0];
+    const canvas = document.getElementById('editCanvas');
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    const x = (touch.clientX - rect.left) * scaleX;
+    const y = (touch.clientY - rect.top) * scaleY;
+
+    const maskCtx = maskImage.getContext('2d');
+
+    if (drawMode === 'rectangle') {
+        ctx.putImageData(originalImageData, 0, 0);
+        ctx.strokeStyle = 'white';
+        ctx.strokeRect(startX, startY, x - startX, y - startY);
+    } else {
+        // 在 maskImage 上绘制
+        maskCtx.lineTo(x, y);
+        maskCtx.stroke();
+        
+        // 在 canvas 上实时显示轨迹
+        ctx.putImageData(originalImageData, 0, 0);
+        ctx.globalAlpha = 0.5;
+        ctx.drawImage(maskImage, 0, 0);
+        ctx.globalAlpha = 1.0;
+        
+        // 在 canvas 上绘制当前笔画
+        ctx.strokeStyle = 'white';
+        ctx.lineTo(x, y);
+        ctx.stroke();
+    }
+}
+
+function handleTouchEnd(e) {
+    e.preventDefault();
+    if (!isDrawing) return;
+    isDrawing = false;
+
+    const canvas = document.getElementById('editCanvas');
+    const ctx = canvas.getContext('2d');
+    const maskCtx = maskImage.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    if (drawMode === 'rectangle') {
+        const touch = e.changedTouches[0];
+        const endX = (touch.clientX - rect.left) * scaleX;
+        const endY = (touch.clientY - rect.top) * scaleY;
+        maskCtx.fillStyle = 'white';
+        maskCtx.fillRect(startX, startY, endX - startX, endY - startY);
+    } else {
+        maskCtx.closePath();
+        maskCtx.fillStyle = 'white';
+        maskCtx.fill();
+    }
+
+    ctx.putImageData(originalImageData, 0, 0);
+    ctx.globalAlpha = 0.5;
+    ctx.drawImage(maskImage, 0, 0);
+    ctx.globalAlpha = 1.0;
 }

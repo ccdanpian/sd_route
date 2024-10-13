@@ -13,37 +13,48 @@
         <div id="sd-image-generation-container">
             <div class="input-container-sd">
                 <textarea id="sd-prompt" placeholder="输入图像提示词" rows="3"></textarea>
+                <button id="toggle-config" class="toggle-button">▼</button>
+            </div>
+            <div id="config-container" class="hidden">
                 <div class="form-row">
                     <select id="sd-lora">
                         <option value="">不使用Lora</option>
-                        <option value="flux_lora_aesthetiAnime">flux_lora_aesthetiAnime</option>
-                        <option value="flux_lora_hyper_8steps">flux_lora_hyper_8steps</option>
-                        <option value="flux_lora_realism">flux_lora_realism</option>
-                        <option value="flux_lora_childbook">flux_lora_childbook</option>
-                        <option value="flux_lora_one_click_creative">flux_lora_one_click_creative</option>
+                        <!-- 其他Lora选项 -->
                     </select>
                     <input type="number" id="sd-lora-weight" value="1.0" min="0.1" max="2.0" step="0.1" placeholder="Lora权重">
                     <select id="sd-size">
                         <option value="512x512">512x512</option>
-                        <option value="768x512">768x512</option>
-                        <option value="920x512">920x512</option>
-                        <option value="512x768">512x768</option>
-                        <option value="512x920">512x920</option>
-                        <option value="1024x1024">1024x1024</option>
+                        <option value="768x768">768x768</option>
+                        <!-- 其他尺寸选项 -->
                     </select>
                     <select id="sd-num-images">
                         <option value="1">1张</option>
-                        <option value="2">2张</option>
                         <option value="4">4张</option>
+                        <!-- 其他数量选项 -->
                     </select>
                     <input type="number" id="sd-seed" value="-1" min="-1" placeholder="种子">
                 </div>
+            </div>
+            <div class="button-container">
                 <button id="sd-generate-btn">生成SD图像</button>
             </div>
             <div id="sd-status-container"></div>
             <div id="sd-result-container"></div>
         </div>
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const toggleButton = document.getElementById('toggle-config');
+            const configContainer = document.getElementById('config-container');
+
+            toggleButton.addEventListener('click', function() {
+                configContainer.classList.toggle('hidden');
+                toggleButton.textContent = configContainer.classList.contains('hidden') ? '▼' : '▲';
+            });
+        });
+    </script>
+
     <script type="module" src="static/sd.js"></script>
 
 </body>

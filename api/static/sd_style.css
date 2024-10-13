@@ -14,19 +14,18 @@ body, html {
 h1 {
     margin-top: 0;
     margin-bottom: 20px;
-    text-align: center; /* 居中标题 */
+    text-align: center;
 }
 
 #sd-image-generation-container {
     width: 100%;
-    max-width: 90%; /* 限制最大宽度 */
-    margin: 0 auto; /* 居中容器 */
+    max-width: 90%;
+    margin: 0 auto;
 }
 
 .input-container-sd {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+    position: relative;
+    margin-bottom: 20px;
 }
 
 #sd-prompt {
@@ -44,7 +43,8 @@ h1 {
     flex-wrap: wrap;
 }
 
-select, input[type="number"] {
+.form-row select,
+.form-row input[type="number"] {
     flex: 1;
     padding: 8px;
     border: 1px solid #ccc;
@@ -52,7 +52,8 @@ select, input[type="number"] {
 }
 
 #sd-generate-btn {
-    padding: 10px 20px;
+    width: 100%;
+    padding: 10px;
     background-color: #007bff;
     color: white;
     border: none;
@@ -66,8 +67,27 @@ select, input[type="number"] {
 }
 
 @media (max-width: 768px) {
+    .container {
+        padding: 0;
+    }
+
+    #sd-image-generation-container {
+        max-width: 96%;
+    }
+
     .form-row {
         flex-direction: column;
+    }
+
+    .form-row select,
+    .form-row input[type="number"] {
+        width: 100%;
+    }
+
+    h1 {
+        margin-top: 10px;
+        margin-bottom: 10px;
+        font-size: 20px;
     }
 }
 
@@ -83,3 +103,34 @@ select, input[type="number"] {
     height: auto;
     margin-bottom: 10px;
 }
+
+.toggle-button {
+    position: absolute;
+    bottom: -15px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
+    line-height: 1;
+    z-index: 10;
+    color: #666666; /* 稍浅一点的深灰色 */
+}
+
+.hidden {
+    display: none;
+}
+
+#config-container {
+    margin-top: 20px;
+}
+
+.button-container {
+    width: 100%;
+    margin-top: 10px;
+}
+
+/* 调整其他样式以适应新布局 */
