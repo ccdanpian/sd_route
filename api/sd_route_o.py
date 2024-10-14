@@ -67,7 +67,7 @@ class OAuthState(db.Model):
 # OAuth2 参数
 CLIENT_ID = '6nrNH7lKZuLaZI3IEXjRQJS3vPmWHg6J'
 CLIENT_SECRET = '1XR88b8n9T1oRg2JISzDqDhTitHPd6bP'
-REDIRECT_URI = 'http://localhost:25001/oauth2/callback'
+REDIRECT_URI = 'https://flux.ollama.asia/oauth2/callback'
 AUTHORIZATION_ENDPOINT = 'https://connect.linux.do/oauth2/authorize'
 TOKEN_ENDPOINT = 'https://connect.linux.do/oauth2/token'
 USER_ENDPOINT = 'https://connect.linux.do/api/user'
