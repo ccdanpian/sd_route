@@ -65,12 +65,12 @@ class OAuthState(db.Model):
         self.state = state
 
 # OAuth2 参数
-CLIENT_ID = '6nrNH7lKZuLaZI3IEXjRQJS3vPmWHg6J'
-CLIENT_SECRET = '1XR88b8n9T1oRg2JISzDqDhTitHPd6bP'
-REDIRECT_URI = 'https://flux.ollama.asia/oauth2/callback'
-AUTHORIZATION_ENDPOINT = 'https://connect.linux.do/oauth2/authorize'
-TOKEN_ENDPOINT = 'https://connect.linux.do/oauth2/token'
-USER_ENDPOINT = 'https://connect.linux.do/api/user'
+CLIENT_ID = os.getenv('OAUTH_CLIENT_ID')
+CLIENT_SECRET = os.getenv('OAUTH_CLIENT_SECRET')
+REDIRECT_URI = os.getenv('OAUTH_REDIRECT_URI')
+AUTHORIZATION_ENDPOINT = os.getenv('OAUTH_AUTHORIZATION_ENDPOINT')
+TOKEN_ENDPOINT = os.getenv('OAUTH_TOKEN_ENDPOINT')
+USER_ENDPOINT = os.getenv('OAUTH_USER_ENDPOINT')
 
 # 从环境变量获取配置
 load_dotenv()
