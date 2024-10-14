@@ -25,10 +25,9 @@
                         <option value="flux_lora_childbook">flux_lora_childbook</option>
                         <option value="flux_lora_one_click_creative">flux_lora_one_click_creative</option>
                     </select>
-                    <div id="lora-weight-group" class="input-group" style="display: none;">
-                        <label for="sd-lora-weight">Lora权重:</label>
-                        <input type="number" id="sd-lora-weight" value="1.0" min="0.1" max="2.0" step="0.1" title="Lora权重">
-                    </div>
+                    <select id="sd-lora-weight" style="display: none;">
+                        <!-- 选项将通过JavaScript动态生成 -->
+                    </select>
                     <select id="sd-size">
                         <option value="512x512">512x512</option>
                         <option value="768x512">768x512</option>
@@ -42,12 +41,9 @@
                         <option value="2">2张</option>
                     </select>
                     <input type="number" id="sd-seed" value="-1" min="-1" placeholder="种子">
-                    <div class="input-group custom-input">
-                        <div class="custom-input-container">
-                            <input type="number" id="sd-steps" value="20" min="1" max="30" step="1" title="生成步数 (1-30)" style="display: none;">
-                            <span id="sd-steps-display" class="custom-input-display" contenteditable="true">20 steps</span>
-                        </div>
-                    </div>
+                    <select id="sd-steps">
+                        <!-- 选项将通过JavaScript动态生成 -->
+                    </select>
                 </div>
             </div>
             <div class="button-container">
@@ -63,48 +59,46 @@
             const toggleButton = document.getElementById('toggle-config');
             const configContainer = document.getElementById('config-container');
             const sdLora = document.getElementById('sd-lora');
-            const loraWeightGroup = document.getElementById('lora-weight-group');
+            const sdLoraWeight = document.getElementById('sd-lora-weight');
 
             toggleButton.addEventListener('click', function() {
                 configContainer.classList.toggle('hidden');
                 toggleButton.textContent = configContainer.classList.contains('hidden') ? '▼' : '▲';
             });
 
-            // 添加这个新的事件监听器
+            // 修改这个事件监听器
             sdLora.addEventListener('change', function() {
-                if (this.value) {
-                    loraWeightGroup.style.display = 'flex';
-                } else {
-                    loraWeightGroup.style.display = 'none';
-                }
+                sdLoraWeight.style.display = this.value ? 'inline-block' : 'none';
+            });
+
+            // 生成Lora权重选项
+            for (let i = 1; i <= 20; i++) {
+                const value = i / 10;
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = value.toFixed(1);
+                if (value === 1.0) option.selected = true;
+                sdLoraWeight.appendChild(option);
+            }
+
+            // 生成步数选项
+            const sdSteps = document.getElementById('sd-steps');
+            for (let i = 2; i <= 36; i += 2) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = `${i} steps`;
+                if (i === 20) option.selected = true;
+                sdSteps.appendChild(option);
+            }
+
+            // 种子输入框自动选中
+            const sdSeed = document.getElementById('sd-seed');
+            sdSeed.addEventListener('focus', function() {
+                this.select();
             });
 
             // 初始化时检查一次
-            if (sdLora.value) {
-                loraWeightGroup.style.display = 'flex';
-            }
-
-            const sdSteps = document.getElementById('sd-steps');
-            const sdStepsDisplay = document.getElementById('sd-steps-display');
-
-            function updateStepsDisplay() {
-                let value = sdStepsDisplay.textContent.replace(/[^0-9]/g, '');
-                value = Math.max(1, Math.min(30, parseInt(value) || 1)); // 更新最大值为 30
-                sdSteps.value = value;
-                sdStepsDisplay.textContent = `${value} steps`;
-            }
-
-            sdStepsDisplay.addEventListener('blur', updateStepsDisplay);
-
-            sdStepsDisplay.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    this.blur();
-                }
-            });
-
-            // Initialize display
-            updateStepsDisplay();
+            sdLoraWeight.style.display = sdLora.value ? 'inline-block' : 'none';
         });
     </script>
 
