@@ -1,33 +1,161 @@
-// import { openPreviewWindow } from './inpaint.js';
+console.debug('sd.js 文件开始执行');
 
-// 确保正确导入 openPreviewWindow 函数
 import { openPreviewWindow } from './inpaint.js';
-
-// 如果 apiUrl 是在 sd.js 中定义的，需要导出它以供 inpaint.js 使用
-export const apiUrl = '';  // 替换为实际的 API URL
-
 import { apiRequest, setToken, clearToken } from './api.js';
 
-const DEBUG_MODE = false;  // 设置为 true 开启调试模式
+export const apiUrl = '';  // 替换为实际的 API URL
+
+const DEBUG_MODE = true;  // 设置为 true 以启用更多日志
 let currentTaskId = null;
 let taskQueue = [];
 let statusCheckInterval = null;
 const taskDisplayStatus = {};
 
 let generateBtn;
+let isAuthenticated = false;
 
-document.addEventListener('DOMContentLoaded', function() {
-    // 将所有的初始化代码和事件监听器放在这里
+console.debug('sd.js 模块开始加载');  // 使用 console.debug 替代 console.log
+
+export function checkAuthStatus() {
+    console.log('正在检查认证状态');
+    const token = getCookie('access_token') || localStorage.getItem('access_token');
+    if (token) {
+        console.log('找到访问令牌');
+        localStorage.setItem('access_token', token);  // 将 token 保存到 localStorage 中
+        setToken(token);
+        fetchUserInfo();
+    } else {
+        console.log('未找到访问令牌，显示登录按钮');
+        showLoginButton();
+    }
+}
+
+function showLoginButton() {
+    const authSection = document.getElementById('auth-section');
+    if (authSection) {
+        authSection.innerHTML = '<button id="login-btn">登录</button>';
+        document.getElementById('login-btn').addEventListener('click', login);
+    } else {
+        console.error('未找到 auth-section 元素');
+    }
+}
+
+export function login() {
+    console.debug('执行登录');
+    window.location.href = `${apiUrl}/login`;
+}
+
+function logout() {
+    console.debug('Logging out...');
+    apiRequest('/logout', 'GET')
+        .then(data => {
+            if (data.success) {
+                console.debug('Logout successful');
+                clearToken();
+                localStorage.removeItem('access_token');
+                isAuthenticated = false;
+                showLoginButton();
+                updateUIForAuth();
+            } else {
+                console.error('Logout was not successful:', data);
+            }
+        })
+        .catch(error => {
+            console.error('Logout error:', error);
+        });
+}
+
+function fetchUserInfo() {
+    console.debug('获取用户信息');
+    apiRequest('/user/info', 'GET')
+        .then(data => {
+            if (data.error) {
+                console.error('获取用户信息失败:', data.error);
+                throw new Error(data.error);
+            }
+            console.debug('成功获取用户信息:', data);
+            isAuthenticated = true;
+            updateUIForAuth(data);
+            displayUserInfo(data);
+        })
+        .catch(error => {
+            console.error('获取用户信息时出错:', error);
+            isAuthenticated = false;
+            updateUIForAuth();
+            showLoginButton();
+        });
+}
+
+function displayUserInfo(userData) {
+    const authSection = document.getElementById('auth-section');
+    if (authSection) {
+        authSection.innerHTML = `
+            <span>欢迎, ${userData.name || userData.username}!</span>
+            <button id="logout-btn">登出</button>
+        `;
+        document.getElementById('logout-btn').addEventListener('click', logout);
+    } else {
+        console.error('未找到 auth-section 元素');
+    }
+}
+
+function updateUIForAuth() {
+    console.debug('更新UI认证状态, isAuthenticated:', isAuthenticated);
+    if (generateBtn) {
+        generateBtn.disabled = !isAuthenticated;
+        console.debug('生成按钮状态:', generateBtn.disabled ? '禁用' : '启用');
+    } else {
+        console.error('生成按钮未找到');
+    }
+}
+
+export function handleCallback() {
+    console.debug('Handling OAuth callback');
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    if (code) {
+        console.debug('Authorization code received:', code);
+        apiRequest(`/auth/callback?code=${code}`, 'GET')
+            .then(data => {
+                if (data.success) {
+                    console.debug('OAuth callback successful');
+                    localStorage.setItem('access_token', data.access_token);
+                    setToken(data.access_token);
+                    fetchUserInfo();
+                } else {
+                    console.error('OAuth callback was not successful:', data);
+                    showLoginButton();
+                }
+            })
+            .catch(error => {
+                console.error('Error handling callback:', error);
+                showLoginButton();
+            });
+    } else {
+        console.warn('No authorization code found in URL');
+    }
+}
+
+export function initSD() {
+    console.debug('初始化SD模块');
     generateBtn = document.getElementById('sd-generate-btn');
     if (generateBtn) {
         generateBtn.addEventListener('click', generateImages);
+        console.debug('已添加生成按钮事件监听器');
     } else {
-        console.error('未找到 sd-generate-btn 元素');
+        console.error('在DOM中未找到生成按钮');
     }
-    // ... 其他初始化代码 ...
-});
+    checkAuthStatus();
+}
 
 async function generateImages() {
+    console.debug('尝试生成图像');
+    if (!isAuthenticated) {
+        console.warn('用户未认证，显示提醒');
+        alert('请先登录');
+        return;
+    }
+
     if (!generateBtn) {
         console.error('generateBtn 未定义');
         return;
@@ -60,6 +188,8 @@ async function generateImages() {
         updateStatus("正在提交任务...");
         const data = await apiRequest('/sd/generate', 'POST', params);
         
+        console.log('API 响应:', data);  // 添加这行来看 API 响应
+
         if (data.task_id) {
             addToQueue(data.task_id, data.queuePosition);
             await checkStatus(data.task_id);
@@ -67,10 +197,10 @@ async function generateImages() {
             updateStatus("生成失败：未收到任务ID");
         }
     } catch (error) {
-        console.error('Error:', error);
-        if (error.status === 401 && error.auth_url) {
-            updateStatus("需要认证，正在跳转...");
-            window.location.href = error.auth_url;
+        console.error('错误:', error);
+        if (error.status === 401) {
+            updateStatus("需要认证，请登录");
+            showLoginButton();
         } else if (error.status === 400) {
             updateStatus(error.message || "请求参数错误");
         } else if (error.status === 429) {
@@ -114,7 +244,7 @@ function processNextTask() {
 function createTaskStatusElement(taskId, queuePosition) {
     if (!DEBUG_MODE) return;
 
-    const taskContainer = document.getElementById('sd-task-container');
+    const taskContainer = document.getElementById('sd-status-container');
     const taskElement = document.createElement('div');
     taskElement.id = `sd-task-${taskId}`;
     taskElement.innerHTML = `
@@ -255,18 +385,20 @@ function displayImages(taskId, fileNames, seeds, translatedPrompt) {
     }
 }
 
-function logout() {
-    clearToken();
-    // 可能需要重定向到登录页面或刷新当前页面
-    window.location.reload();
+// 辅助函数：获取 cookie 值
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
 }
 
-// 在 DOMContentLoaded 事件监听器中添加登出按钮的事件监听器
+// 在文件末尾添加初始化代码
 document.addEventListener('DOMContentLoaded', function() {
-    // ... 现有的代码 ...
-
-    const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', logout);
-    }
+    console.debug('DOM 内容已加载，开始初始化 SD 模块');
+    initSD();
 });
+
+console.debug('sd.js 模块加载完成');
+
+// 在 sd.js 文件末尾
+window.checkAuthStatus = checkAuthStatus;
