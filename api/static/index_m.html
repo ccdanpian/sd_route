@@ -10,6 +10,14 @@
 <body>
     <div class="container">
         <h1>Flux dev</h1>
+        <!-- 添加认证部分 -->
+        <div id="auth-section"></div>
+        <!-- 修改认证部分 -->
+        <div id="auth-section">
+            <button id="login-btn" style="display: none;">登录</button>
+            <button id="logout-btn" style="display: none;">登出</button>
+            <span id="user-info" style="display: none;"></span>
+        </div>
         <div id="sd-image-generation-container">
             <div class="input-container-sd">
                 <textarea id="sd-prompt" placeholder="输入图像提示词" rows="3"></textarea>
@@ -99,6 +107,25 @@
 
             // 初始化时检查一次
             sdLoraWeight.style.display = sdLora.value ? 'inline-block' : 'none';
+
+            // 移除这行，因为我们现在在 sd.js 中处理认证检查
+            // checkAuth();
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            if (document.cookie.includes('auth_success=true')) {
+                console.log('检测到认证成功标志');
+                // 删除 cookie
+                document.cookie = 'auth_success=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+                // 触发认证状态检查
+                if (typeof checkAuthStatus === 'function') {
+                    console.log('检查认证状态');
+                    checkAuthStatus();
+                    console.log('认证状态检查完成');
+                } else {
+                    console.error('checkAuthStatus 函数未定义');
+                }
+            }
         });
     </script>
 
