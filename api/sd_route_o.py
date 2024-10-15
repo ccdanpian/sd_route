@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify, send_from_directory, make_response, session, redirect
-from flask_sqlalchemy import SQLAlchemy
-from flask_session import Session
-from flask_cors import CORS  # 添加这行
+from flask_cors import CORS
+from functools import wraps
 import requests
 import io
 from io import BytesIO
@@ -9,7 +8,7 @@ import base64
 from PIL import Image
 import os
 import random
-from datetime import datetime, timedelta
+from datetime import datetime
 import threading
 import time
 import json
@@ -19,8 +18,10 @@ from uuid import uuid4
 from queue import Queue
 from openai import OpenAI
 from dotenv import load_dotenv
-from functools import wraps
+import secrets
 from urllib.parse import urlencode
+import jwt
+from flask_sqlalchemy import SQLAlchemy
 
 # 禁用SSL警告（仅用于测试环境）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -30,47 +31,10 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True)  # 添加这行，启用 CORS 支持
+CORS(app, supports_credentials=True)
 
-app.config['SECRET_KEY'] = os.urandom(24)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sessions.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SESSION_FILE_DIR'] = './tmp/flask_session'  # 确保这个目录存在并可写
-app.config['SESSION_PERMANENT'] = False
-app.config['SESSION_USE_SIGNER'] = True
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)  # 设置会话有效期为7天
-
-db = SQLAlchemy(app)
-app.config['SESSION_SQLALCHEMY'] = db
-
-# 检查并创建会话目录
-if not os.path.exists(app.config['SESSION_FILE_DIR']):
-    try:
-        os.makedirs(app.config['SESSION_FILE_DIR'])
-        logger.info(f"Created session directory: {app.config['SESSION_FILE_DIR']}")
-    except Exception as e:
-        logger.error(f"Failed to create session directory: {e}")
-        raise
-
-Session(app)
-
-# OAuth 状态模型
-class OAuthState(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    state = db.Column(db.String(32), unique=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    def __init__(self, state):
-        self.state = state
-
-# OAuth2 参数
-CLIENT_ID = os.getenv('OAUTH_CLIENT_ID')
-CLIENT_SECRET = os.getenv('OAUTH_CLIENT_SECRET')
-REDIRECT_URI = os.getenv('OAUTH_REDIRECT_URI')
-AUTHORIZATION_ENDPOINT = os.getenv('OAUTH_AUTHORIZATION_ENDPOINT')
-TOKEN_ENDPOINT = os.getenv('OAUTH_TOKEN_ENDPOINT')
-USER_ENDPOINT = os.getenv('OAUTH_USER_ENDPOINT')
+# 设置 secret key
+app.secret_key = os.environ.get('FLASK_SECRET_KEY') or secrets.token_hex(16)
 
 # 从环境变量获取配置
 load_dotenv()
@@ -80,10 +44,15 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 OPENAI_API_BASE = os.getenv('OPENAI_API_BASE')
 ENABLE_IP_RESTRICTION = os.getenv('ENABLE_IP_RESTRICTION', 'False').lower() == 'true'
 CHATGPT_MODEL = os.getenv('CHATGPT_MODEL', 'gpt-4o-mini-2024-07-18')
-CONTENT_REVIEW_PROMPT = os.getenv('CONTENT_REVIEW_PROMPT', '你是一个内容审核助手。请判断以下提示词是否包含身体敏感部位未被遮挡、或中国国家领导人信息。只回答“是”或“否”，不要解释。')
-# 新增环境变量引入
+CONTENT_REVIEW_PROMPT = os.getenv('CONTENT_REVIEW_PROMPT', '你是一个内容审核助手。请判断以下提示词是否包含身体敏感部位未被遮挡、或中国国家领导人信息。只回答"是"或"否"，不要解释。')
 MAX_QUEUE_SIZE = int(os.getenv('MAX_QUEUE_SIZE', '3'))
-SD_MODEL = os.getenv('SD_MODEL', 'v1-5-pruned-emaonly.safetensors')  # 从.env文件中获取大模型名称
+SD_MODEL = os.getenv('SD_MODEL', 'v1-5-pruned-emaonly.safetensors')
+AUTH_SERVICE_URL = os.getenv('AUTH_SERVICE_URL', 'http://localhost:25002')
+JWT_SECRET = os.getenv('JWT_SECRET')
+JWT_ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
+
+# 禁用SSL警告（仅用于测试环境）
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 if not OPENAI_API_KEY:
     raise ValueError("请设置 OPENAI_API_KEY 环境变量")
@@ -111,208 +80,6 @@ task_lock = threading.Lock()
 active_ip_requests = {}
 ip_lock = threading.Lock()
 
-# 创建数据库表
-with app.app_context():
-    db.create_all()
-
-def require_oauth(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if 'user_id' not in session or 'access_token' not in session:
-            return redirect('/oauth2/initiate')
-        if not check_token():
-            return redirect('/oauth2/initiate')
-        return f(*args, **kwargs)
-    return decorated
-
-def initiate_oauth_flow():
-    """初始化OAuth认证流程"""
-    oauth_state = os.urandom(16).hex()
-    new_state = OAuthState(state=oauth_state)
-    db.session.add(new_state)
-    db.session.commit()
-    logger.debug(f"Generated OAuth state: {oauth_state}")
-    
-    params = {
-        'client_id': CLIENT_ID,
-        'response_type': 'code',
-        'redirect_uri': REDIRECT_URI,
-        'state': oauth_state
-    }
-    authorization_url = f"{AUTHORIZATION_ENDPOINT}?{urlencode(params)}"
-    logger.debug(f"Authorization URL: {authorization_url}")
-    
-    return authorization_url
-
-@app.route('/sd/generate', methods=['POST'])
-def generate():
-    logger.debug(f"Session contents at generate: {dict(session)}")
-    if 'user_id' not in session:
-        logger.info("User not authenticated, initiating OAuth flow")
-        auth_url = initiate_oauth_flow()
-        return jsonify({"error": "Unauthorized", "auth_url": auth_url}), 401
-    
-    logger.info(f"User {session['user_id']} authenticated, proceeding with image generation")
-    # 检查用户是否有权限使用该功能
-    if not session['active'] or session['silenced'] or session['trust_level'] < 2:
-        return jsonify({"error": "您没有权限使用此功能"}), 403
-    # logger.info("收到生成图片请求")
-    data = request.json
-    # logger.debug(f"请求数据: {json.dumps(data, indent=2)}")
-
-    # 获取请求的 IP 地址
-    ip_address = get_client_ip()
-    # logger.info(f"请求 IP 地址: {ip_address}")
-
-    # 只在启用 IP 限制时检查
-    if ENABLE_IP_RESTRICTION:
-        with ip_lock:
-            if ip_address in active_ip_requests:
-                return jsonify({"error": "您已有一个活跃请求，请等待当前请求完成后再试"}), 429
-            active_ip_requests[ip_address] = True
-
-    phone_number = request.cookies.get('phoneNumber')
-    # logger.info(f'*****phoneNumber: {phone_number}')
-
-    prompt = data.get('prompt', '')
-    if not prompt:
-        return jsonify({"error": "提示词不能为空"}), 400
-
-    try:
-        contains_inappropriate_content = check_prompt_with_chatgpt(prompt)
-        if contains_inappropriate_content:
-            return jsonify({"error": "提示词可能包含不适当的内容。请修改后重试。"}), 400
-
-        translated_prompt = translate_to_english(prompt)
-
-        # 构建模型参数
-        model_params = SD_MODEL
-        if data.get('lora', False):
-            lora_name = data.get('lora_name', '')
-            lora_weight = data.get('lora_weight', 0.7)  # 默认权重为0.7
-            model_params += f"<lora:{lora_name}:{lora_weight}>"
-            # 将 lora 信息添加到 prompt 中
-            translated_prompt += f", <lora:{lora_name}:{lora_weight}>"
-
-        task_id = str(uuid4())
-
-        task = {
-            'task_id': task_id,
-            'type': 'generate',
-            'model': model_params,
-            'prompt': translated_prompt,
-            'negative_prompt': data.get('negative_prompt', 'NSFW'),
-            'steps': data.get('steps', 15),  # 添加步数，默认为15
-            'width': data.get('width', 512),
-            'height': data.get('height', 512),
-            'num_images': data.get('num_images', 1),
-            'seed': data.get('seed', -1),
-            'ip_address': ip_address
-        }
-
-        if task_queue.qsize() >= MAX_QUEUE_SIZE:
-            if ENABLE_IP_RESTRICTION:
-                with ip_lock:
-                    del active_ip_requests[ip_address]
-            return jsonify({"error": "队列已满，请稍后再试"}), 429
-
-        queue_position = task_queue.qsize()
-        task_queue.put(task)
-        task_status[task_id] = {"status": "排队中" if queue_position > 0 else "处理中", "progress": 0, "queuePosition": queue_position}
-
-        if queue_position == 0:
-            threading.Thread(target=process_task, args=(task, phone_number, ip_address)).start()
-
-        return jsonify({"task_id": task_id, "queuePosition": queue_position})
-    except Exception as e:
-        logger.error(f"处理提示词时出错: {str(e)}")
-        return jsonify({"error": "处理提示词时出现错误，请稍后重试。"}), 500
-
-@app.route('/oauth2/callback')
-def callback():
-    code = request.args.get('code')
-    state = request.args.get('state')
-    logger.debug(f"Received callback with code: {code} and state: {state}")
-    logger.debug(f"Session contents at callback: {dict(session)}")
-    logger.debug(f"Session OAuth state: {session.get('oauth_state')}")
-
-    # 验证状态
-    db_state = OAuthState.query.filter_by(state=state).first()
-    if not db_state:
-        logger.warning("State value not found or expired")
-        return '状态值不匹配或已过期', 401
-
-    # 删除已使用的状态
-    db.session.delete(db_state)
-    db.session.commit()
-
-    # 请求token
-    auth = requests.auth.HTTPBasicAuth(CLIENT_ID, CLIENT_SECRET)
-    data = {
-        'grant_type': 'authorization_code',
-        'code': code,
-        'redirect_uri': REDIRECT_URI
-    }
-    headers = {'Accept': 'application/json'}
-    logger.debug(f"Requesting token with data: {data}")
-    response = requests.post(TOKEN_ENDPOINT, auth=auth, data=data, headers=headers)
-    logger.debug(f"Token response status: {response.status_code}")
-
-    if response.status_code == 200:
-        token_data = response.json()
-        session['access_token'] = token_data['access_token']
-        session['refresh_token'] = token_data.get('refresh_token')
-        session['token_expiry'] = datetime.now() + timedelta(seconds=token_data.get('expires_in', 3600))
-        logger.info("Access token obtained and stored in session")
-        
-        user_response = requests.get(USER_ENDPOINT, headers={'Authorization': f"Bearer {session['access_token']}"})
-        if user_response.status_code == 200:
-            user_info = user_response.json()
-            session['user_id'] = user_info['id']
-            session['username'] = user_info['username']
-            session['name'] = user_info['name']
-            session['active'] = user_info['active']
-            session['trust_level'] = user_info['trust_level']
-            session['silenced'] = user_info['silenced']
-            session.permanent = True  # 使会话持久化
-            session.modified = True  # 确保会话被保存
-            logger.debug(f"Session after setting user info: {dict(session)}")
-            return redirect('/')
-        else:
-            return '获取用户信息失败', user_response.status_code
-    else:
-        logger.error(f"Failed to fetch access token: {response.text}")
-        return '获取访问令牌失败', response.status_code
-
-def refresh_token():
-    if 'refresh_token' not in session:
-        return False
-
-    auth = requests.auth.HTTPBasicAuth(CLIENT_ID, CLIENT_SECRET)
-    data = {
-        'grant_type': 'refresh_token',
-        'refresh_token': session['refresh_token']
-    }
-    headers = {'Accept': 'application/json'}
-    response = requests.post(TOKEN_ENDPOINT, auth=auth, data=data, headers=headers)
-
-    if response.status_code == 200:
-        token_data = response.json()
-        session['access_token'] = token_data['access_token']
-        session['token_expiry'] = datetime.now() + timedelta(seconds=token_data.get('expires_in', 3600))
-        if 'refresh_token' in token_data:
-            session['refresh_token'] = token_data['refresh_token']
-        return True
-    return False
-
-def check_token():
-    if 'token_expiry' not in session or datetime.now() >= session['token_expiry']:
-        if not refresh_token():
-            return False
-    return True
-
-# 上边都是认证代码
-# 下边是生成图片的代码
 def update_queue_positions():
     with task_lock:
         for i, task in enumerate(list(task_queue.queue)):
@@ -320,32 +87,36 @@ def update_queue_positions():
             if task_id in task_status and task_status[task_id]['status'] == "排队中":
                 task_status[task_id]['queuePosition'] = i
 
-def process_task(task, phone_number, ip_address):
+def process_task(task, user_id, ip_address):
     task_id = task['task_id']
-    # logger.info(f"开始处理任务: task_id={task_id}, type={task['type']}")
+    logger.info(f"Processing task {task_id} for user {user_id}")
     
     try:
         if task['type'] == 'inpaint':
+            logger.info(f"Starting inpainting task {task_id}")
             result = inpaint_image(task)
             if 'error' in result:
-                # logger.error(f"重绘任务 {task_id} 重绘失败: {result['error']}")
-                update_task_status(task_id, f"重绘失败: {result['error']}", 100, phone_number=phone_number)
+                logger.error(f"Inpainting task {task_id} failed: {result['error']}")
+                update_task_status(task_id, f"重绘失败: {result['error']}", 100, user_id=user_id)
             else:
-                # logger.info(f"重绘任务 {task_id} 重绘完成")
+                logger.info(f"Inpainting task {task_id} completed successfully")
                 update_task_status(task_id, "重绘完成", 100, 
                                    inpainted_image_url=result['inpainted_image_url'],
                                    file_name=result['file_name'],
                                    save_time=result['save_time'],
                                    inpaint_prompt=result['inpaint_prompt'],
-                                   phone_number=phone_number)
+                                   user_id=user_id)
         elif task['type'] == 'generate':
+            logger.info(f"Starting image generation task {task_id}")
             seeds, file_names, save_time = generate_images(task)
-            update_task_status(task_id, "完成", 100, seeds=seeds, file_names=file_names, translated_prompt=task['prompt'], phone_number=phone_number, save_time=save_time)
+            logger.info(f"Image generation task {task_id} completed")
+            update_task_status(task_id, "完成", 100, seeds=seeds, file_names=file_names, translated_prompt=task['prompt'], user_id=user_id, save_time=save_time)
         else:
+            logger.error(f"Unknown task type for task {task_id}: {task['type']}")
             raise ValueError(f"未知的任务类型: {task['type']}")
     except Exception as e:
-        logger.error(f"处理任务 {task_id} 时出错: {str(e)}")
-        update_task_status(task_id, f"失败: {str(e)}", 100, phone_number=phone_number)
+        logger.error(f"Error processing task {task_id}: {str(e)}")
+        update_task_status(task_id, f"失败: {str(e)}", 100, user_id=user_id)
     finally:
         with task_lock:
             if not task_queue.empty():
@@ -358,7 +129,8 @@ def process_task(task, phone_number, ip_address):
         if not task_queue.empty():
             next_task = task_queue.queue[0]
             next_ip = next_task.get('ip_address', 'unknown')
-            threading.Thread(target=process_task, args=(next_task, phone_number, next_ip)).start()
+            logger.info(f"Starting next task in queue: {next_task['task_id']}")
+            threading.Thread(target=process_task, args=(next_task, session['user_id'], next_ip)).start()
 
 def update_task_status(task_id, status, progress, **kwargs):
     with task_lock:
@@ -560,10 +332,151 @@ def log_request_info():
     ip = get_client_ip()
     logger.info(f'Request from IP: {ip}, Path: {request.path}, Method: {request.method}')
 
+def require_oauth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        logger.info(f"Checking OAuth for route: {request.path}")
+        if 'access_token' not in session or not check_token():
+            logger.warning("No valid access token, initiating OAuth flow")
+            auth_url = f"{AUTH_SERVICE_URL}/oauth2/initiate"
+            return jsonify({
+                "error": "Unauthorized", 
+                "message": "Authentication required",
+                "auth_url": auth_url
+            }), 401
+        logger.info("OAuth check passed")
+        return f(*args, **kwargs)
+    return decorated
+
+def check_token():
+    logger.info("Validating token with auth service")
+    try:
+        response = requests.post(f"{AUTH_SERVICE_URL}/oauth2/validate", json={"access_token": session['access_token']})
+        logger.debug(f"Token validation response: {response.status_code}")
+        if response.status_code == 200:
+            user_info = response.json().get('user_info')
+            if user_info:
+                logger.info(f"Token valid, user info received: {user_info}")
+                session['user_id'] = user_info['id']
+                session['username'] = user_info['username']
+                session['name'] = user_info['name']
+                session['active'] = user_info['active']
+                session['trust_level'] = user_info['trust_level']
+                session['silenced'] = user_info['silenced']
+                return True
+        logger.warning("Token validation failed or no user info received")
+        return False
+    except requests.RequestException as e:
+        logger.error(f"Error during token validation: {str(e)}")
+        return False
+
+@app.route('/oauth2/callback')
+def oauth_callback():
+    logger.info("Received OAuth callback")
+    code = request.args.get('code')
+    state = request.args.get('state')
+    logger.debug(f"Callback params - code: {code}, state: {state}")
+    try:
+        response = requests.post(f"{AUTH_SERVICE_URL}/oauth2/callback", json={"code": code, "state": state})
+        logger.debug(f"Auth service callback response: {response.status_code}")
+        if response.status_code == 200:
+            token_data = response.json()
+            session['access_token'] = token_data['access_token']
+            logger.info("Access token received and stored in session")
+            if check_token():
+                logger.info("User info retrieved and stored in session")
+                return jsonify({"message": "Authentication successful"}), 200
+            else:
+                logger.warning("Failed to retrieve user info after getting access token")
+                return jsonify({"error": "Failed to retrieve user information"}), 400
+        else:
+            logger.error(f"Auth service callback failed: {response.status_code}")
+            return jsonify({"error": "Authentication failed"}), response.status_code
+    except requests.RequestException as e:
+        logger.error(f"Error during OAuth callback: {str(e)}")
+        return jsonify({"error": "Error during authentication process"}), 500
+
+@app.route('/sd/generate', methods=['POST'])
+@require_oauth
+def generate():
+    logger.info("Received request for image generation")
+    if not session['active'] or session['silenced'] or session['trust_level'] < 2:
+        logger.warning(f"User {session['user_id']} does not have permission to generate images")
+        return jsonify({"error": "您没有权限使用此功能"}), 403
+    
+    # logger.info("收到生成图片请求")
+    data = request.json
+    # logger.debug(f"请求数据: {json.dumps(data, indent=2)}")
+
+    # 获取请求的 IP 地址
+    ip_address = get_client_ip()
+    # logger.info(f"请求 IP 地址: {ip_address}")
+
+    # 只在启用 IP 限制时检查
+    if ENABLE_IP_RESTRICTION:
+        with ip_lock:
+            if ip_address in active_ip_requests:
+                return jsonify({"error": "您已有一个活跃请求，请等待当前请求完成后再试"}), 429
+            active_ip_requests[ip_address] = True
+
+    prompt = data.get('prompt', '')
+    if not prompt:
+        return jsonify({"error": "提示词不能为空"}), 400
+
+    try:
+        contains_inappropriate_content = check_prompt_with_chatgpt(prompt)
+        if contains_inappropriate_content:
+            return jsonify({"error": "提示词可能包含不适当的内容。请修改后重试。"}), 400
+
+        translated_prompt = translate_to_english(prompt)
+
+        # 构建模型参数
+        model_params = SD_MODEL
+        if data.get('lora', False):
+            lora_name = data.get('lora_name', '')
+            lora_weight = data.get('lora_weight', 0.7)  # 默认权重为0.7
+            model_params += f"<lora:{lora_name}:{lora_weight}>"
+            # 将 lora 信息添加到 prompt 中
+            translated_prompt += f", <lora:{lora_name}:{lora_weight}>"
+
+        task_id = str(uuid4())
+
+        task = {
+            'task_id': task_id,
+            'type': 'generate',
+            'model': model_params,
+            'prompt': translated_prompt,
+            'negative_prompt': data.get('negative_prompt', 'NSFW'),
+            'steps': data.get('steps', 15),  # 添加步数，默认为15
+            'width': data.get('width', 512),
+            'height': data.get('height', 512),
+            'num_images': data.get('num_images', 1),
+            'seed': data.get('seed', -1),
+            'ip_address': ip_address
+        }
+
+        if task_queue.qsize() >= MAX_QUEUE_SIZE:
+            if ENABLE_IP_RESTRICTION:
+                with ip_lock:
+                    del active_ip_requests[ip_address]
+            return jsonify({"error": "队列已满，请稍后再试"}), 429
+
+        queue_position = task_queue.qsize()
+        task_queue.put(task)
+        task_status[task_id] = {"status": "排队中" if queue_position > 0 else "处理中", "progress": 0, "queuePosition": queue_position}
+
+        if queue_position == 0:
+            threading.Thread(target=process_task, args=(task, session['user_id'], ip_address)).start()
+
+        return jsonify({"task_id": task_id, "queuePosition": queue_position})
+    except Exception as e:
+        logger.error(f"处理提示词时出错: {str(e)}")
+        return jsonify({"error": "处理提示词时出现错误，请稍后重试。"}), 500
+
 @app.route('/sd/status/<task_id>', methods=['GET'])
 @require_oauth
 def get_status(task_id):
-    # logger.info(f"收到任务 {task_id} 的状态请求")
+    logger.info(f"Received status request for task {task_id}")
     status = task_status.get(task_id, {"status": "未知任务", "progress": 0})
     if status["status"] == "排队中":
         status["queuePosition"] = next((i for i, task in enumerate(list(task_queue.queue)) if task['task_id'] == task_id), -1)
@@ -601,9 +514,11 @@ def get_image_dimensions(image_data):
 @app.route('/sd/inpaint', methods=['POST'])
 @require_oauth
 def inpaint():
-    # 检查用户是否有权限使用该功能
+    logger.info("Received request for image inpainting")
     if not session['active'] or session['silenced'] or session['trust_level'] < 2:
+        logger.warning(f"User {session['user_id']} does not have permission to use inpainting")
         return jsonify({"error": "您没有权限使用此功能"}), 403
+    
     # logger.info("收到图片重绘请求")
     data = request.json
     # logger.info(f"请求数据: prompt={data.get('prompt')}, model_name={data.get('model_name')}")
@@ -618,9 +533,6 @@ def inpaint():
             if ip_address in active_ip_requests:
                 return jsonify({"error": "您已有一个活跃请求，请等待当前请求完成后再试"}), 429
             active_ip_requests[ip_address] = True
-
-    phone_number = request.cookies.get('phoneNumber')
-    # logger.info(f'*****phoneNumber: {phone_number}')
 
     prompt = data.get('prompt', '')
     if not prompt:
@@ -668,7 +580,7 @@ def inpaint():
         task_status[task_id] = {"status": "排队中" if queue_position > 0 else "处理中", "progress": 0, "queuePosition": queue_position}
 
         if queue_position == 0:
-            threading.Thread(target=process_task, args=(task, phone_number, ip_address)).start()
+            threading.Thread(target=process_task, args=(task, session['user_id'], ip_address)).start()
 
         return jsonify({"task_id": task_id, "status": "pending"})
     except Exception as e:
@@ -678,9 +590,24 @@ def inpaint():
 @app.route('/sd/task_status/<task_id>', methods=['GET'])
 @require_oauth
 def get_task_status(task_id):
+    logger.info(f"Received task status request for task {task_id}")
     status = task_status.get(task_id, {"status": "未知任务", "progress": 0})
     # logger.info(f"获取任务状态: task_id={task_id}, status={status}")
     return jsonify(status)
+
+# 新增路由：获取当前用户信息
+@app.route('/user/info', methods=['GET'])
+@require_oauth
+def get_user_info():
+    logger.info(f"Received request for user info: {session['user_id']}")
+    return jsonify({
+        "id": session['user_id'],
+        "username": session['username'],
+        "name": session['name'],
+        "active": session['active'],
+        "trust_level": session['trust_level'],
+        "silenced": session['silenced']
+    })
 
 # 修改 inpaint_image 函数以返回结果而不是直接响应
 def inpaint_image(task):
@@ -822,25 +749,38 @@ def inpaint_image(task):
             os.remove(os.path.join(temp_dir, file))
         os.rmdir(temp_dir)
 
-# 新增路由：获取当前用户信息
-@app.route('/user/info', methods=['GET'])
-@require_oauth
-def get_user_info():
-    return jsonify({
-        "id": session['user_id'],
-        "username": session['username'],
-        "name": session['name'],
-        "active": session['active'],
-        "trust_level": session['trust_level'],
-        "silenced": session['silenced']
-    })
+@app.route('/auth/result', methods=['POST'])
+def auth_result():
+    auth_data = request.json
 
-# 定期清理过期的状态
-def cleanup_expired_states():
-    expiration_time = datetime.utcnow() - timedelta(minutes=5)
-    OAuthState.query.filter(OAuthState.created_at < expiration_time).delete()
-    db.session.commit()
+    if auth_data['auth_status'] == 'success':
+        user_id = auth_data['user_id']
+        
+        # 从数据库获取用户信息
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': '用户不存在'}), 404
+
+        # 创建 JWT token
+        token_payload = {
+            'user_id': user.id,
+            'username': user.username,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1)  # 设置过期时间
+        }
+        token = jwt.encode(token_payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+        return jsonify({
+            'status': 'success',
+            'message': '认证成功',
+            'token': token
+        }), 200
+    else:
+        error_message = auth_data.get('error_message', '认证失败')
+        return jsonify({
+            'status': 'error',
+            'message': error_message
+        }), 400
 
 if __name__ == '__main__':
-    logger.info("启动服务器")
+    logger.info(f"Starting server on port 25001, AUTH_SERVICE_URL: {AUTH_SERVICE_URL}")
     app.run(host='0.0.0.0', port=25001, threaded=True)

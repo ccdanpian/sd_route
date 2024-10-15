@@ -6,6 +6,8 @@ import { openPreviewWindow } from './inpaint.js';
 // 如果 apiUrl 是在 sd.js 中定义的，需要导出它以供 inpaint.js 使用
 export const apiUrl = '';  // 替换为实际的 API URL
 
+import { apiRequest, setToken, clearToken } from './api.js';
+
 const DEBUG_MODE = false;  // 设置为 true 开启调试模式
 let currentTaskId = null;
 let taskQueue = [];
@@ -38,18 +40,17 @@ async function generateImages() {
 
     const params = {
         prompt: document.getElementById('sd-prompt').value,
-        negative_prompt: "NSFW",  // 默认负面提示词
+        negative_prompt: "NSFW",
         width: width,
         height: height,
         num_images: parseInt(document.getElementById('sd-num-images').value),
-        steps: parseInt(document.getElementById('sd-steps').value),  // 添加步数参数
+        steps: parseInt(document.getElementById('sd-steps').value),
         seed: parseInt(document.getElementById('sd-seed').value),
-        lora: loraValue !== "",  // 布尔值，表示是否使用Lora
-        lora_name: loraValue,  // Lora的名称
-        lora_weight: parseFloat(document.getElementById('sd-lora-weight').value)  // Lora权重
+        lora: loraValue !== "",
+        lora_name: loraValue,
+        lora_weight: parseFloat(document.getElementById('sd-lora-weight').value)
     };
 
-    // 如果没有选择Lora，则删除相关参数
     if (!params.lora) {
         delete params.lora_name;
         delete params.lora_weight;
@@ -57,29 +58,8 @@ async function generateImages() {
 
     try {
         updateStatus("正在提交任务...");
-        const response = await fetch(`${apiUrl}/sd/generate`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(params),
-        });
-
-        const data = await response.json();
-        if (!response.ok) {
-            if (response.status === 401 && data.auth_url) {
-                updateStatus("需要认证，正在跳转...");
-                window.location.href = data.auth_url;  // 直接使用后端提供的认证URL
-                return;
-            } else if (response.status === 400 && data.error) {
-                updateStatus(data.error);
-            } else if (response.status === 429) {
-                updateStatus(data.error || "排队已满，请稍后再试");
-            } else {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return;
-        }
-
+        const data = await apiRequest('/sd/generate', 'POST', params);
+        
         if (data.task_id) {
             addToQueue(data.task_id, data.queuePosition);
             await checkStatus(data.task_id);
@@ -88,7 +68,16 @@ async function generateImages() {
         }
     } catch (error) {
         console.error('Error:', error);
-        updateStatus("生成失败：" + error.message);
+        if (error.status === 401 && error.auth_url) {
+            updateStatus("需要认证，正在跳转...");
+            window.location.href = error.auth_url;
+        } else if (error.status === 400) {
+            updateStatus(error.message || "请求参数错误");
+        } else if (error.status === 429) {
+            updateStatus(error.message || "排队已满，请稍后再试");
+        } else {
+            updateStatus("生成失败：" + (error.message || "未知错误"));
+        }
     } finally {
         generateBtn.disabled = false;
     }
@@ -265,3 +254,19 @@ function displayImages(taskId, fileNames, seeds, translatedPrompt) {
         }
     }
 }
+
+function logout() {
+    clearToken();
+    // 可能需要重定向到登录页面或刷新当前页面
+    window.location.reload();
+}
+
+// 在 DOMContentLoaded 事件监听器中添加登出按钮的事件监听器
+document.addEventListener('DOMContentLoaded', function() {
+    // ... 现有的代码 ...
+
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', logout);
+    }
+});
