@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory, make_response, session, redirect
+from flask import Flask, request, jsonify, send_from_directory, make_response, session, redirect, url_for
 from flask_cors import CORS
 from functools import wraps
 import requests
@@ -190,7 +190,7 @@ def generate_images(task):
 
     update_task_status(task['task_id'], f"正在使用模型 {SD_MODEL} 生成图片...", 0)
     try:
-        # logger.info(f"发送请求到 {SD_URL}/sdapi/v1/txt2img")
+        # logger.info(f"送请到 {SD_URL}/sdapi/v1/txt2img")
         response = requests.post(url=f'{SD_URL}/sdapi/v1/txt2img', json=payload, verify=False, timeout=120)
         response.raise_for_status()
         r = response.json()
@@ -332,85 +332,68 @@ def log_request_info():
     ip = get_client_ip()
     logger.info(f'Request from IP: {ip}, Path: {request.path}, Method: {request.method}')
 
-def require_oauth(f):
+def require_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        logger.info(f"Checking OAuth for route: {request.path}")
-        if 'access_token' not in session or not check_token():
-            logger.warning("No valid access token, initiating OAuth flow")
-            auth_url = f"{AUTH_SERVICE_URL}/oauth2/initiate"
-            return jsonify({
-                "error": "Unauthorized", 
-                "message": "Authentication required",
-                "auth_url": auth_url
-            }), 401
-        logger.info("OAuth check passed")
+        access_token = request.cookies.get('access_token') or session.get('access_token')
+        
+        if not access_token:
+            logger.warning("需要认证：未找到访问令牌")
+            return jsonify({"error": "Authentication required"}), 401
+        
+        logger.info("验证访问令牌")
+        logger.info(f"访问令牌: {access_token}")
+        
+        # 使用 /oauth/userinfo 端点来验证令牌
+        verify_response = requests.post(f"{AUTH_SERVICE_URL}/oauth/verify", 
+                                        json={"access_token": access_token})
+        
+        if verify_response.status_code != 200:
+            logger.warning("无效或过期的令牌")
+            session.clear()
+            response = make_response(jsonify({"error": "Invalid or expired token", "auth_url": url_for('login', _external=True)}), 401)
+            response.delete_cookie('access_token')
+            return response
+        
+        user_info = verify_response.json()
+        session['user_id'] = user_info['user_info']['id']
+        session['user_info'] = user_info['user_info']
+        session['token_expiry'] = user_info['token_expiry']
+        session['access_token'] = access_token  # 更新 session 中的 access_token
+        
         return f(*args, **kwargs)
     return decorated
 
-def check_token():
-    logger.info("Validating token with auth service")
+def check_token(token):
     try:
-        response = requests.post(f"{AUTH_SERVICE_URL}/oauth2/validate", json={"access_token": session['access_token']})
-        logger.debug(f"Token validation response: {response.status_code}")
+        response = requests.post(f"{AUTH_SERVICE_URL}/oauth2/validate", json={"access_token": token})
         if response.status_code == 200:
             user_info = response.json().get('user_info')
             if user_info:
-                logger.info(f"Token valid, user info received: {user_info}")
-                session['user_id'] = user_info['id']
-                session['username'] = user_info['username']
-                session['name'] = user_info['name']
-                session['active'] = user_info['active']
-                session['trust_level'] = user_info['trust_level']
-                session['silenced'] = user_info['silenced']
+                session.update(user_info)
                 return True
-        logger.warning("Token validation failed or no user info received")
         return False
-    except requests.RequestException as e:
-        logger.error(f"Error during token validation: {str(e)}")
+    except requests.RequestException:
         return False
-
-@app.route('/oauth2/callback')
-def oauth_callback():
-    logger.info("Received OAuth callback")
-    code = request.args.get('code')
-    state = request.args.get('state')
-    logger.debug(f"Callback params - code: {code}, state: {state}")
-    try:
-        response = requests.post(f"{AUTH_SERVICE_URL}/oauth2/callback", json={"code": code, "state": state})
-        logger.debug(f"Auth service callback response: {response.status_code}")
-        if response.status_code == 200:
-            token_data = response.json()
-            session['access_token'] = token_data['access_token']
-            logger.info("Access token received and stored in session")
-            if check_token():
-                logger.info("User info retrieved and stored in session")
-                return jsonify({"message": "Authentication successful"}), 200
-            else:
-                logger.warning("Failed to retrieve user info after getting access token")
-                return jsonify({"error": "Failed to retrieve user information"}), 400
-        else:
-            logger.error(f"Auth service callback failed: {response.status_code}")
-            return jsonify({"error": "Authentication failed"}), response.status_code
-    except requests.RequestException as e:
-        logger.error(f"Error during OAuth callback: {str(e)}")
-        return jsonify({"error": "Error during authentication process"}), 500
 
 @app.route('/sd/generate', methods=['POST'])
-@require_oauth
+@require_auth
 def generate():
-    logger.info("Received request for image generation")
-    if not session['active'] or session['silenced'] or session['trust_level'] < 2:
-        logger.warning(f"User {session['user_id']} does not have permission to generate images")
+    logger.info("收到生成图片请求")
+    user_info = session.get('user_info', {})
+    if not user_info:
+        logger.warning(f"用户 {session.get('user_id')} 的会话中没有用户信息")
+        return jsonify({"error": "无法获取用户信息"}), 403
+
+    if not user_info.get('active', False) or user_info.get('silenced', False) or user_info.get('trust_level', 0) < 2:
+        logger.warning(f"用户 {user_info.get('id')} 没有权限生成图片")
         return jsonify({"error": "您没有权限使用此功能"}), 403
     
-    # logger.info("收到生成图片请求")
     data = request.json
-    # logger.debug(f"请求数据: {json.dumps(data, indent=2)}")
+    logger.debug(f"请求数据: {json.dumps(data, indent=2)}")
 
-    # 获取请求的 IP 地址
     ip_address = get_client_ip()
-    # logger.info(f"请求 IP 地址: {ip_address}")
+    logger.info(f"请求 IP 地址: {ip_address}")
 
     # 只在启用 IP 限制时检查
     if ENABLE_IP_RESTRICTION:
@@ -447,7 +430,7 @@ def generate():
             'model': model_params,
             'prompt': translated_prompt,
             'negative_prompt': data.get('negative_prompt', 'NSFW'),
-            'steps': data.get('steps', 15),  # 添加步数，默认为15
+            'steps': data.get('steps', 15),  # 添加数，默认为15
             'width': data.get('width', 512),
             'height': data.get('height', 512),
             'num_images': data.get('num_images', 1),
@@ -474,7 +457,7 @@ def generate():
         return jsonify({"error": "处理提示词时出现错误，请稍后重试。"}), 500
 
 @app.route('/sd/status/<task_id>', methods=['GET'])
-@require_oauth
+@require_auth
 def get_status(task_id):
     logger.info(f"Received status request for task {task_id}")
     status = task_status.get(task_id, {"status": "未知任务", "progress": 0})
@@ -512,20 +495,18 @@ def get_image_dimensions(image_data):
 
 # 添加新的 inpaint 路由
 @app.route('/sd/inpaint', methods=['POST'])
-@require_oauth
+@require_auth
 def inpaint():
-    logger.info("Received request for image inpainting")
+    logger.info("收到图片重绘请求")
     if not session['active'] or session['silenced'] or session['trust_level'] < 2:
-        logger.warning(f"User {session['user_id']} does not have permission to use inpainting")
+        logger.warning(f"用户 {session['user_id']} 没有权限使用重绘功能")
         return jsonify({"error": "您没有权限使用此功能"}), 403
     
-    # logger.info("收到图片重绘请求")
     data = request.json
-    # logger.info(f"请求数据: prompt={data.get('prompt')}, model_name={data.get('model_name')}")
+    logger.info(f"请求数据: prompt={data.get('prompt')}, model_name={data.get('model_name')}")
 
-    # 获取请求的 IP 地址
     ip_address = get_client_ip()
-    # logger.info(f"请求 IP 地址: {ip_address}")
+    logger.info(f"请求 IP 地址: {ip_address}")
 
     # 只在启用 IP 限制时检查
     if ENABLE_IP_RESTRICTION:
@@ -541,12 +522,12 @@ def inpaint():
     try:
         contains_inappropriate_content = check_prompt_with_chatgpt(prompt)
         if contains_inappropriate_content:
-            return jsonify({"error": "提示词可能包含不适当的内容。请修改后重试。"}), 400
+            return jsonify({"error": "提示词可能包含不适当的内。请修改后重试。"}), 400
 
         translated_prompt = translate_to_english(prompt)
 
         task_id = str(uuid4())
-        # logger.info(f"创建新的重绘任务: task_id={task_id}")
+        logger.info(f"创建新的重绘任务: task_id={task_id}")
 
         task = {
             'task_id': task_id,
@@ -561,7 +542,7 @@ def inpaint():
             'ip_address': ip_address
         }
 
-        # logger.info(f"********************steps: {task['steps']}")
+        logger.info(f"********************steps: {task['steps']}")
 
         # 如果有 LoRA 信息，也添加到任务中
         if data.get('lora', False):
@@ -573,7 +554,7 @@ def inpaint():
             if ENABLE_IP_RESTRICTION:
                 with ip_lock:
                     del active_ip_requests[ip_address]
-            return jsonify({"error": "队列已满，请稍后再试"}), 429
+            return jsonify({"error": "队列已满，请稍后试"}), 429
 
         queue_position = task_queue.qsize()
         task_queue.put(task)
@@ -588,32 +569,40 @@ def inpaint():
         return jsonify({"error": "处理提示词时出现错误，请稍后重试。"}), 500
 
 @app.route('/sd/task_status/<task_id>', methods=['GET'])
-@require_oauth
+@require_auth
 def get_task_status(task_id):
     logger.info(f"Received task status request for task {task_id}")
     status = task_status.get(task_id, {"status": "未知任务", "progress": 0})
-    # logger.info(f"获取任务状态: task_id={task_id}, status={status}")
+    logger.info(f"获取任务状态: task_id={task_id}, status={status}")
     return jsonify(status)
 
-# 新增路由：获取当前用户信息
+# 新增路由：获取当前用户��息
 @app.route('/user/info', methods=['GET'])
-@require_oauth
+@require_auth
 def get_user_info():
-    logger.info(f"Received request for user info: {session['user_id']}")
-    return jsonify({
-        "id": session['user_id'],
-        "username": session['username'],
-        "name": session['name'],
-        "active": session['active'],
-        "trust_level": session['trust_level'],
-        "silenced": session['silenced']
-    })
+    logger.info(f"收到用户信息请求: user_id={session['user_id']}")
+    user_info = session.get('user_info', {})
+    if not user_info:
+        logger.warning(f"用户 {session['user_id']} 的会话中没有用户信息")
+        return jsonify({"error": "User information not found"}), 404
+    
+    # 只返回必要的信息
+    safe_user_info = {
+        "id": user_info.get('id'),
+        "username": user_info.get('username'),
+        "name": user_info.get('name'),
+        "active": user_info.get('active'),
+        "trust_level": user_info.get('trust_level'),
+        "silenced": user_info.get('silenced')
+    }
+    logger.debug(f"返回用户信息: {safe_user_info}")
+    return jsonify(safe_user_info)
 
 # 修改 inpaint_image 函数以返回结果而不是直接响应
 def inpaint_image(task):
     task_id = task['task_id']
-    # logger.info(f"开始重绘任务: task_id={task_id}")
-    update_task_status(task_id, "重绘中...", 0)
+    logger.info(f"开始重绘任务: task_id={task_id}")
+    update_task_status(task_id, "重中...", 0)
     
     prompt = task.get('prompt')
     original_image = task.get('original_image')
@@ -621,19 +610,9 @@ def inpaint_image(task):
     model_name = task.get('model_name')
     steps = min(task.get('steps') + 6, 36)
 
-    # logger.info(f"######################inpaint steps: {steps}")
+    logger.info(f"重绘任务参数: task_id={task_id}, prompt={prompt}, model_name={model_name}, steps={steps}")
 
-    # logger.info(f"开始处理重绘任务: task_id={task_id}, prompt={prompt}, model_name={model_name}")
-
-    if not all([prompt, original_image, mask_image, model_name]):
-        missing = [k for k, v in {'prompt': prompt, 'original_image': original_image, 
-                                  'mask_image': mask_image, 'model_name': model_name}.items() if not v]
-        error_msg = f"重绘任务缺少必要参数: {', '.join(missing)}"
-        logger.error(error_msg)
-        update_task_status(task_id, "重绘失败", 100, error=error_msg)
-        return {"error": error_msg}
-
-    # 创建临时目录来保存图片
+    # 创时目录来保存图片
     temp_dir = f"temp_{task_id}"
     os.makedirs(temp_dir, exist_ok=True)
 
@@ -656,7 +635,7 @@ def inpaint_image(task):
         with Image.open(original_image_path) as img:
             original_width, original_height = img.size
 
-        # logger.info(f"原始图片尺寸: {original_width}x{original_height}")
+        logger.info(f"原始图片尺寸: {original_width}x{original_height}")
 
         update_task_status(task_id, "正在设置模型", 10)
         # 设置模型和LoRA
@@ -700,17 +679,18 @@ def inpaint_image(task):
 
         update_task_status(task_id, "正在发送重绘请求", 30)
         # 发送请求到 SD API
-        # logger.info(f"准备发送重绘请求到 {SD_URL}")
+        logger.info(f"准备发送重绘请求到 {SD_URL}")
         response = requests.post(url=f'{SD_URL}/sdapi/v1/img2img', json=payload, verify=False, timeout=120)
         response.raise_for_status()
         result = response.json()
 
         if 'images' not in result or not result['images']:
+            logger.error("响应中没有有效的图片数据")
             raise Exception("响应中没有有效的图片数据")
 
         update_task_status(task_id, "正在处理重绘结果", 70)
         inpainted_image = result['images'][0]
-        # logger.info("图片重绘成功完成")
+        logger.info("图片重绘成功完成")
 
         # 保存重绘后的图片
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -722,12 +702,12 @@ def inpaint_image(task):
         with open(save_path, "wb") as f:
             f.write(base64.b64decode(inpainted_image))
 
-        # logger.info(f"重绘图片已保存: {save_path}")
+        logger.info(f"重绘图片已保存: {save_path}")
 
         # 构建图片URL
         image_url = f"/images/sd/{task_id}/{file_name}"
 
-        # logger.info(f"重绘任务完成: task_id={task_id}")
+        logger.info(f"重绘任务完成: task_id={task_id}")
         update_task_status(task_id, "重绘完成", 100, inpainted_image_url=image_url)
 
         return {
@@ -740,7 +720,7 @@ def inpaint_image(task):
 
     except Exception as e:
         error_msg = f"处理重绘任务时出错: {str(e)}"
-        # logger.error(f"{error_msg} task_id={task_id}")
+        logger.error(f"{error_msg} task_id={task_id}")
         update_task_status(task_id, "重绘失败", 100, error=error_msg)
         return {"error": error_msg}
     finally:
@@ -749,38 +729,104 @@ def inpaint_image(task):
             os.remove(os.path.join(temp_dir, file))
         os.rmdir(temp_dir)
 
-@app.route('/auth/result', methods=['POST'])
-def auth_result():
-    auth_data = request.json
-
-    if auth_data['auth_status'] == 'success':
-        user_id = auth_data['user_id']
-        
-        # 从数据库获取用户信息
-        user = User.query.get(user_id)
-        if not user:
-            return jsonify({'error': '用户不存在'}), 404
-
-        # 创建 JWT token
-        token_payload = {
-            'user_id': user.id,
-            'username': user.username,
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1)  # 设置过期时间
-        }
-        token = jwt.encode(token_payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-
-        return jsonify({
-            'status': 'success',
-            'message': '认证成功',
-            'token': token
-        }), 200
+@app.route('/login')
+def login():
+    logger.info("用户请求登录")
+    auth_response = requests.get(f"{AUTH_SERVICE_URL}/oauth/authorize")
+    if auth_response.status_code == 200:
+        auth_data = auth_response.json()
+        logger.info(f"重定向到认证服务的授权 URL: {auth_data['auth_url']}")
+        return redirect(auth_data['auth_url'])
     else:
-        error_message = auth_data.get('error_message', '认证失败')
-        return jsonify({
-            'status': 'error',
-            'message': error_message
-        }), 400
+        logger.error("启动认证过程失败")
+        return jsonify({"error": "Failed to start authentication process"}), 500
+
+@app.route('/auth/complete')
+def auth_complete():
+    logger.info("收到认证完成回调")
+    temp_token = request.args.get('token')
+    if not temp_token:
+        logger.warning("未提供临时令牌")
+        return jsonify({"error": "No token provided"}), 400
+
+    logger.info("使用临时令牌获取用户信息")
+    user_info_response = requests.post(f"{AUTH_SERVICE_URL}/oauth/userinfo", 
+                                       json={"temp_token": temp_token})
+    if user_info_response.status_code != 200:
+        logger.error(f"获取用户信息失败: {user_info_response.text}")
+        return jsonify({"error": "Failed to get user info"}), 400
+
+    user_data = user_info_response.json()
+    
+    logger.info(f"用户 {user_data['user_info']['id']} 认证成功")
+    session['access_token'] = user_data['access_token']
+    session['refresh_token'] = user_data['refresh_token']
+    session['token_expiry'] = user_data['token_expiry']
+    session['user_info'] = user_data['user_info']
+    session['user_id'] = user_data['user_info']['id']
+
+    response = make_response(redirect(url_for('index')))
+    response.set_cookie('access_token', user_data['access_token'], 
+                        max_age=3600, httponly=False, secure=True, samesite='Strict')
+    response.set_cookie('auth_success', 'true', 
+                        max_age=300, httponly=False, secure=True, samesite='Strict')
+    
+    logger.info(f"认证完成，重定向到首页")
+    return response
+
+def refresh_access_token():
+    if 'refresh_token' not in session:
+        logger.warning("没有可用的刷新令牌")
+        return False
+
+    logger.info("尝试刷新访问令牌")
+    refresh_response = requests.post(f"{AUTH_SERVICE_URL}/oauth/refresh", 
+                                     json={"refresh_token": session['refresh_token']})
+    if refresh_response.status_code == 200:
+        new_token_data = refresh_response.json()
+        session['access_token'] = new_token_data['access_token']
+        session['refresh_token'] = new_token_data.get('refresh_token', session['refresh_token'])
+        session['token_expiry'] = new_token_data['expires_in']
+        logger.info("访问令牌刷新成功")
+        return True
+    logger.warning("刷新访问令牌失败")
+    return False
+
+@app.route('/logout')
+@require_auth
+def logout():
+    user_id = session.get('user_id')
+    logger.info(f"用户 {user_id} 请求登出")
+    if user_id:
+        logout_response = requests.post(f"{AUTH_SERVICE_URL}/oauth/logout", json={"user_id": user_id})
+        if logout_response.status_code == 200:
+            logger.info(f"用户 {user_id} 在认证服务中成功登出")
+        else:
+            logger.warning(f"用户 {user_id} 在认证服务中登出失败")
+    session.clear()
+    logger.info(f"用户 {user_id} 已成功从本地会话登出")
+    return redirect(url_for('index'))
+
+# 在文件顶部添加这个标志
+_startup_done = False
+
+# 替换 @app.before_first_request 的函数
+def log_startup_info():
+    global _startup_done
+    if not _startup_done:
+        logger.info("应用启动")
+        # 记录其他重要的配置信息，但要注意不要记录敏感信息如密钥
+        _startup_done = True
+
+# 添加这个装饰器和函数
+@app.before_request
+def before_request():
+    log_startup_info()
+
+# 在文件末尾，但在 if __name__ == '__main__': 之前
+with app.app_context():
+    log_startup_info()
 
 if __name__ == '__main__':
-    logger.info(f"Starting server on port 25001, AUTH_SERVICE_URL: {AUTH_SERVICE_URL}")
+    logger.info(f"启动服务器,端口 25001, AUTH_SERVICE_URL: {AUTH_SERVICE_URL}")
     app.run(host='0.0.0.0', port=25001, threaded=True)
