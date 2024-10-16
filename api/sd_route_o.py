@@ -767,7 +767,7 @@ def auth_complete():
 
     response = make_response(redirect(url_for('index')))
     response.set_cookie('access_token', user_data['access_token'], 
-                        max_age=3600, httponly=False, secure=True, samesite='Strict')
+                        max_age=3600*24*15, httponly=False, secure=True, samesite='Strict')
     response.set_cookie('auth_success', 'true', 
                         max_age=300, httponly=False, secure=True, samesite='Strict')
     
