@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, make_response, session, redirect, url_for
+from flask import request, jsonify, make_response, session, redirect, url_for
 from functools import wraps
 import requests
 import os
@@ -6,6 +6,8 @@ import logging
 from dotenv import load_dotenv
 import jwt
 from datetime import datetime, timedelta
+from token_cache import token_cache
+from app import app  # 从 app.py 导入 app
 
 # 设置日志
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -28,6 +30,16 @@ def require_auth(f):
         
         logger.info("验证访问令牌")
         
+        cached_info = token_cache.get(access_token)
+        if cached_info:
+            user_id, user_info, expiry = cached_info
+            session['user_id'] = user_id
+            session['user_info'] = user_info
+            session['token_expiry'] = expiry.isoformat()
+            session['access_token'] = access_token
+            logger.info("使用缓存的令牌信息")
+            return f(*args, **kwargs)
+        
         try:
             # 使用 /oauth/verify 端点验证令牌
             verify_response = requests.post(f"{AUTH_SERVICE_URL}/oauth/verify", 
@@ -42,18 +54,24 @@ def require_auth(f):
             session['token_expiry'] = user_info['token_expiry']
             session['access_token'] = access_token
             
+            # 缓存令牌信息
+            expiry = datetime.fromisoformat(user_info['token_expiry'])
+            token_cache.set(access_token, session['user_id'], session['user_info'], expiry)
+            
         except jwt.ExpiredSignatureError:
             logger.warning("令牌已过期")
             if refresh_access_token():
                 return decorated(*args, **kwargs)
             else:
                 session.clear()
+                token_cache.delete(access_token)
                 response = make_response(jsonify({"error": "Token expired", "auth_url": url_for('login', _external=True)}), 401)
                 response.delete_cookie('access_token')
                 return response
         except jwt.InvalidTokenError:
             logger.warning("无效的令牌")
             session.clear()
+            token_cache.delete(access_token)
             response = make_response(jsonify({"error": "Invalid token", "auth_url": url_for('login', _external=True)}), 401)
             response.delete_cookie('access_token')
             return response
@@ -72,7 +90,8 @@ def login():
         logger.error("启动认证过程失败")
         return jsonify({"error": "Failed to start authentication process"}), 500
 
-def auth_complete(request, session):
+@app.route('/auth/complete')
+def auth_complete():
     logger.info("收到认证完成回调")
     temp_token = request.args.get('token')
     if not temp_token:
@@ -95,6 +114,9 @@ def auth_complete(request, session):
     session['user_info'] = user_data['user_info']
     session['user_id'] = user_data['user_info']['id']
 
+    # 确保 expiry 是一个没有时区信息的 datetime 对象
+    expiry = datetime.fromisoformat(user_data['token_expiry']).replace(tzinfo=None)
+    
     response = make_response(redirect(url_for('index')))
     response.set_cookie('access_token', user_data['access_token'], 
                         max_age=3600*24*7, httponly=False, secure=True, samesite='Strict')
@@ -102,6 +124,7 @@ def auth_complete(request, session):
                         max_age=300, httponly=False, secure=True, samesite='Strict')
     
     logger.info(f"认证完成，重定向到首页")
+    token_cache.set(session['access_token'], session['user_id'], session['user_info'], expiry)
     return response
 
 def refresh_access_token(session):
@@ -117,10 +140,22 @@ def refresh_access_token(session):
         session['access_token'] = new_token_data['access_token']
         session['refresh_token'] = new_token_data.get('refresh_token', session['refresh_token'])
         session['token_expiry'] = new_token_data['expires_in']
+        
+        # 更新缓存
+        expiry = datetime.fromisoformat(new_token_data['expires_in'])
+        token_cache.set(session['access_token'], session['user_id'], session['user_info'], expiry)
+        
         logger.info("访问令牌刷新成功")
         return True
     logger.warning("刷新访问令牌失败")
     return False
+
+# 添加定期清理过期缓存的函数
+def clean_expired_cache():
+    token_cache.clean_expired()
+    logger.info("已清理过期的令牌缓存")
+
+# 可以设置一个定时任务来定期调用 clean_expired_cache 函数
 
 def logout(session):
     user_id = session.get('user_id')
