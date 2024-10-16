@@ -90,10 +90,14 @@ function displayUserInfo(userData) {
     const authSection = document.getElementById('auth-section');
     if (authSection) {
         authSection.innerHTML = `
-            <span>欢迎, ${userData.name || userData.username}!</span>
-            <button id="logout-btn">登出</button>
+            <div class="user-info">
+                <img class="avatar" src="${userData.avatar_url}" alt="头像">
+                <span class="username">${userData.name || userData.username}</span>
+                <button id="logout-btn">登出</button>
+            </div>
         `;
         document.getElementById('logout-btn').addEventListener('click', logout);
+        
     } else {
         console.error('未找到 auth-section 元素');
     }
@@ -149,15 +153,15 @@ export function initSD() {
 }
 
 async function generateImages() {
-    console.debug('尝试生成图像');
+    updateDebugLog('尝试生成图像');
     if (!isAuthenticated) {
-        console.warn('用户未认证，显示提醒');
+        updateDebugLog('用户未认证，显示提醒');
         alert('请先登录');
         return;
     }
 
     if (!generateBtn) {
-        console.error('generateBtn 未定义');
+        updateDebugLog('generateBtn 未定义');
         return;
     }
     generateBtn.disabled = true;
@@ -184,43 +188,36 @@ async function generateImages() {
         delete params.lora_weight;
     }
 
+    updateDebugLog(`请求参数: ${JSON.stringify(params)}`);
+
     try {
         updateStatus("正在提交任务...");
         const response = await apiRequest('/sd/generate', 'POST', params);
         
-        const text = await response.text();  // 获取响应文本
-        console.log('API 响应:', text);  // 记录原始响应
+        updateDebugLog(`API 响应: ${JSON.stringify(response)}`);
 
-        try {
-            const data = JSON.parse(text);  // 尝试解析 JSON
-            
-            if (!response.ok) {
-                if (response.status === 400 && data.error) {
-                    updateStatus(data.error);
-                } else if (response.status === 401) {
-                    updateStatus("需要认证，请登录");
-                    showLoginButton();
-                } else if (response.status === 429) {
-                    updateStatus(data.error || "排队已满，请稍后再试");
-                } else {
-                    throw new Error(`HTTP 错误！状态码: ${response.status}`);
-                }
-                return;
-            }
-
-            if (data.task_id) {
-                addToQueue(data.task_id, data.queuePosition);
-                await checkStatus(data.task_id);
-            } else {
-                updateStatus("生成失败：未收到任务ID");
-            }
-        } catch (parseError) {
-            console.error('JSON 解析错误:', parseError);
-            updateStatus("服务器响应格式错误");
+        if (response.error) {
+            updateDebugLog(`API 返回错误: ${response.error}`);
+            updateStatus(`生成失败：${response.error}`);
+            return;
         }
+
+        if (!response.task_id) {
+            updateDebugLog(`响应中没有 task_id: ${JSON.stringify(response)}`);
+            throw new Error('未收到任务ID');
+        }
+
+        updateDebugLog(`成功接收到任务 ID: ${response.task_id}`);
+        addToQueue(response.task_id, response.queuePosition, response.max_queue_size);
+        await checkStatus(response.task_id);
+
     } catch (error) {
-        console.error('错误:', error);
-        updateStatus("生成失败：" + (error.message || "未知错误"));
+        updateDebugLog(`生成图像时发生错误: ${error.message}`);
+        if (error.response && error.response.error) {
+            updateStatus(`生成失败：${error.response.error}`);
+        } else {
+            updateStatus("生成失败：" + (error.message || "未知错误"));
+        }
     } finally {
         generateBtn.disabled = false;
     }
@@ -235,11 +232,11 @@ function clearPreviousImages() {
     }
 }
 
-function addToQueue(taskId, queuePosition) {
+function addToQueue(taskId, queuePosition, maxQueueSize) {
     taskQueue.push(taskId);
     taskDisplayStatus[taskId] = false; // 初始化任务显示状态
-    createTaskStatusElement(taskId, queuePosition);
-    updateStatus(`已添加到队列，当前位置：${queuePosition + 1}`);
+    createTaskStatusElement(taskId, queuePosition, maxQueueSize);
+    updateStatus("排队中", queuePosition, maxQueueSize);
     if (!currentTaskId) {
         processNextTask();
     }
@@ -254,14 +251,14 @@ function processNextTask() {
     }
 }
 
-function createTaskStatusElement(taskId, queuePosition) {
+function createTaskStatusElement(taskId, queuePosition, maxQueueSize) {
     if (!DEBUG_MODE) return;
 
     const taskContainer = document.getElementById('sd-status-container');
     const taskElement = document.createElement('div');
     taskElement.id = `sd-task-${taskId}`;
     taskElement.innerHTML = `
-        <div class="task-status">任务ID: ${taskId}</div>
+        <div class="task-status">任务ID: ${taskId} - 队列位置: ${queuePosition + 1}/${maxQueueSize}</div>
         <div class="imageContainer"></div>
     `;
     taskContainer.appendChild(taskElement);
@@ -269,32 +266,33 @@ function createTaskStatusElement(taskId, queuePosition) {
 
 function startStatusCheck(taskId) {
     clearInterval(statusCheckInterval);
-    statusCheckInterval = setInterval(() => checkStatus(taskId), 5000);
+    statusCheckInterval = setInterval(() => checkStatus(taskId), 10000);
 }
 
 async function checkStatus(taskId) {
     try {
-        const response = await fetch(`${apiUrl}/sd/status/${taskId}`);
-        const data = await response.json();
+        const response = await apiRequest(`/sd/status/${taskId}`, 'GET');
+        updateDebugLog(`任务 ${taskId} 状态更新: ${JSON.stringify(response)}`);
 
-        updateTaskElement(taskId, data);
-        updateStatus(getStatusMessage(data.status, data.queuePosition));
+        updateTaskElement(taskId, response);
+        updateStatus(response.status, response.queuePosition, response.max_queue_size);
 
-        if (data.status === "完成" && !taskDisplayStatus[taskId]) {
-            if (data.file_names && data.seeds && data.translated_prompt) {
-                displayImages(taskId, data.file_names, data.seeds, data.translated_prompt);
-                taskDisplayStatus[taskId] = true; // 标记该任务的图片已显示
+        if (response.status === "完成" && !taskDisplayStatus[taskId]) {
+            if (response.file_names && response.seeds && response.translated_prompt) {
+                displayImages(taskId, response.file_names, response.seeds, response.translated_prompt);
+                taskDisplayStatus[taskId] = true;
             }
             finishCurrentTask();
-        } else if (data.status.startsWith("失败")) {
+        } else if (response.status.startsWith("失败")) {
+            updateDebugLog(`任务 ${taskId} 失败: ${response.error || '未知错误'}`);
+            updateStatus(`生成失败：${response.error || '未知错误'}`);
             finishCurrentTask();
-        } else if (data.status !== "完成") {
-            // 继续检查状态
-            setTimeout(() => checkStatus(taskId), 5000);
+        } else if (response.status !== "完成") {
+            setTimeout(() => checkStatus(taskId), 10000);
         }
     } catch (error) {
-        console.error('Error:', error);
-        updateStatus("状态查询失败");
+        updateDebugLog(`查任务 ${taskId} 状态时出错: ${error.message}`);
+        updateStatus("状态查询失败：" + (error.message || "未知错误"));
         finishCurrentTask();
     }
 }
@@ -306,18 +304,18 @@ function updateTaskElement(taskId, data) {
     if (taskElement) {
         const statusElement = taskElement.querySelector('.task-status');
         if (statusElement) {
-            statusElement.textContent = `任务ID: ${taskId} - 状态: ${data.status}`;
+            statusElement.textContent = `任务ID: ${taskId} - 状态: ${data.status} - 队列位置: ${data.queuePosition + 1}/${data.max_queue_size}`;
         }
     }
     
     // 始终更新全局状态
-    updateStatus(getStatusMessage(data.status, data.queuePosition));
+    // updateStatus(data.status, data.queuePosition, data.max_queue_size);
 }
 
-function getStatusMessage(status, queuePosition) {
+function getStatusMessage(status, queuePosition, maxQueueSize) {
     switch (status) {
         case "排队中":
-            return `正在排队，当前位置：${queuePosition + 1}`;
+            return `正在排队，当前位置：${queuePosition + 1}/${maxQueueSize}`;
         case "处理中":
             return "正在生成图片";
         case "完成":
@@ -333,10 +331,14 @@ function finishCurrentTask() {
     processNextTask();
 }
 
-function updateStatus(message) {
+function updateStatus(message, queuePosition, maxQueueSize) {
     const statusContainer = document.getElementById('sd-status-container');
     if (statusContainer) {
-        statusContainer.textContent = `状态：${message}`;
+        if (message === "排队中" && queuePosition !== undefined) {
+            statusContainer.textContent = `状态：正在排队，当前位置：${queuePosition + 1}`;
+        } else {
+            statusContainer.textContent = `状态：${message}`;
+        }
     } else {
         console.error('未找到 sd-status-container 元素');
     }
@@ -415,3 +417,13 @@ console.debug('sd.js 模块加载完成');
 
 // 在 sd.js 文件末尾
 window.checkAuthStatus = checkAuthStatus;
+
+function updateDebugLog(message) {
+    const logElement = document.getElementById('debug-log');
+    if (logElement) {
+        const timestamp = new Date().toISOString();
+        logElement.value += `${timestamp}: ${message}\n`;
+        logElement.scrollTop = logElement.scrollHeight;
+    }
+    console.debug(message); // 同时在控制台输出日志
+}
