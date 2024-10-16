@@ -186,28 +186,41 @@ async function generateImages() {
 
     try {
         updateStatus("正在提交任务...");
-        const data = await apiRequest('/sd/generate', 'POST', params);
+        const response = await apiRequest('/sd/generate', 'POST', params);
         
-        console.log('API 响应:', data);  // 添加这行来看 API 响应
+        const text = await response.text();  // 获取响应文本
+        console.log('API 响应:', text);  // 记录原始响应
 
-        if (data.task_id) {
-            addToQueue(data.task_id, data.queuePosition);
-            await checkStatus(data.task_id);
-        } else {
-            updateStatus("生成失败：未收到任务ID");
+        try {
+            const data = JSON.parse(text);  // 尝试解析 JSON
+            
+            if (!response.ok) {
+                if (response.status === 400 && data.error) {
+                    updateStatus(data.error);
+                } else if (response.status === 401) {
+                    updateStatus("需要认证，请登录");
+                    showLoginButton();
+                } else if (response.status === 429) {
+                    updateStatus(data.error || "排队已满，请稍后再试");
+                } else {
+                    throw new Error(`HTTP 错误！状态码: ${response.status}`);
+                }
+                return;
+            }
+
+            if (data.task_id) {
+                addToQueue(data.task_id, data.queuePosition);
+                await checkStatus(data.task_id);
+            } else {
+                updateStatus("生成失败：未收到任务ID");
+            }
+        } catch (parseError) {
+            console.error('JSON 解析错误:', parseError);
+            updateStatus("服务器响应格式错误");
         }
     } catch (error) {
         console.error('错误:', error);
-        if (error.status === 401) {
-            updateStatus("需要认证，请登录");
-            showLoginButton();
-        } else if (error.status === 400) {
-            updateStatus(error.message || "请求参数错误");
-        } else if (error.status === 429) {
-            updateStatus(error.message || "排队已满，请稍后再试");
-        } else {
-            updateStatus("生成失败：" + (error.message || "未知错误"));
-        }
+        updateStatus("生成失败：" + (error.message || "未知错误"));
     } finally {
         generateBtn.disabled = false;
     }
