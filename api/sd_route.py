@@ -79,6 +79,22 @@ task_lock = threading.Lock()
 current_processing_ips = set()
 ip_lock = threading.Lock()
 
+# 在文件顶部添加这个常量
+TASK_TIMEOUT = 60  # 60 秒超时
+
+# 添加这个新函数来处理超时
+def handle_timeout(task_id, ip_address, timeout_event):
+    timeout_event.set()
+    with task_lock:
+        if task_id in task_status and task_status[task_id]['status'] != "完成":
+            logger.warning(f"任务 {task_id} (IP: {ip_address}) 超时，正在停止并删除")
+            update_task_status(task_id, "超时", 100)
+            # 从队列中移除任务（如果还在队列中）
+            task_queue.queue = [task for task in task_queue.queue if task['task_id'] != task_id]
+            with ip_lock:
+                current_processing_ips.discard(ip_address)
+            logger.info(f"IP {ip_address} 的请求已从处理列表中移除（由于超时）")
+
 def update_queue_positions():
     with task_lock:
         logger.info(f"更新队列位置前的状态: {task_status}")
@@ -93,10 +109,26 @@ def process_task(task, user_id, ip_address):
     task_id = task['task_id']
     logger.info(f"开始处理任务 {task_id} (用户: {user_id}, IP: {ip_address})")
     
+    timeout_event = threading.Event()
+    timer = threading.Timer(TASK_TIMEOUT, handle_timeout, args=[task_id, ip_address, timeout_event])
+    timer.start()
+    
     try:
         if task['type'] == 'inpaint':
             logger.info(f"Starting inpainting task {task_id}")
-            result = inpaint_image(task)
+            result = inpaint_image(task, timeout_event)
+        elif task['type'] == 'generate':
+            logger.info(f"Starting image generation task {task_id}")
+            result = generate_images(task, timeout_event)
+        else:
+            logger.error(f"Unknown task type for task {task_id}: {task['type']}")
+            raise ValueError(f"未知的任务类型: {task['type']}")
+
+        if timeout_event.is_set():
+            logger.warning(f"Task {task_id} was interrupted due to timeout")
+            return
+
+        if task['type'] == 'inpaint':
             if 'error' in result:
                 logger.error(f"Inpainting task {task_id} failed: {result['error']}")
                 update_task_status(task_id, f"重绘失败: {result['error']}", 100, user_id=user_id)
@@ -109,30 +141,35 @@ def process_task(task, user_id, ip_address):
                                    inpaint_prompt=result['inpaint_prompt'],
                                    user_id=user_id)
         elif task['type'] == 'generate':
-            logger.info(f"Starting image generation task {task_id}")
-            seeds, file_names, save_time = generate_images(task)
             logger.info(f"Image generation task {task_id} completed")
-            update_task_status(task_id, "完成", 100, seeds=seeds, file_names=file_names, translated_prompt=task['prompt'], user_id=user_id, save_time=save_time)
-        else:
-            logger.error(f"Unknown task type for task {task_id}: {task['type']}")
-            raise ValueError(f"未知的任务类型: {task['type']}")
+            update_task_status(task_id, "完成", 100, seeds=result['seeds'], file_names=result['file_names'], translated_prompt=task['prompt'], user_id=user_id, save_time=result['save_time'])
+
     except Exception as e:
         logger.error(f"Error processing task {task_id}: {str(e)}")
         update_task_status(task_id, f"失败: {str(e)}", 100, user_id=user_id)
     finally:
+        timer.cancel()
+        
         with ip_lock:
             current_processing_ips.discard(ip_address)
             logger.info(f"IP {ip_address} 的请求已从处理列表中移除")
-        update_queue_positions()
-        logger.info(f"更新队列位置后的状态: {task_status}")
-        if not task_queue.empty():
-            next_task = task_queue.queue[0]
-            next_ip = next_task.get('ip_address', 'unknown')
-            next_user_id = next_task.get('user_id', 'unknown')
-            logger.info(f"开始处理队列中的下一个任务: {next_task['task_id']} (用户: {next_user_id}, IP: {next_ip})")
-            threading.Thread(target=process_task, args=(next_task, next_user_id, next_ip)).start()
-        else:
-            logger.info("任务队列现在为空")
+        
+        with task_lock:
+            # 移除已完成的任务
+            if not task_queue.empty() and task_queue.queue[0]['task_id'] == task_id:
+                task_queue.get()
+            update_queue_positions()
+            logger.info(f"更新队列位置后的状态: {task_status}")
+            
+            if not task_queue.empty():
+                next_task = task_queue.queue[0]
+                next_ip = next_task.get('ip_address', 'unknown')
+                next_user_id = next_task.get('user_id', 'unknown')
+                logger.info(f"准备处理队列中的下一个任务: {next_task['task_id']} (用户: {next_user_id}, IP: {next_ip})")
+                # 在新线程中处理下一个任务
+                threading.Thread(target=process_task, args=(next_task, next_user_id, next_ip)).start()
+            else:
+                logger.info("任务队列现在为空")
 
         logger.info(f"任务 {task_id} 处理完成")
 
@@ -141,9 +178,16 @@ def update_task_status(task_id, status, progress, **kwargs):
         task_status[task_id] = {
             "status": status,
             "progress": progress,
-            "user_id": kwargs.get('user_id', 'unknown'),  # 使用传入的用户ID
+            "user_id": kwargs.get('user_id', 'unknown'),
             **kwargs
         }
+        # 如果任务完成或失败，从处理中的IP列表移除
+        if status in ["完成", "失败", "超时"]:
+            ip_address = next((task['ip_address'] for task in task_queue.queue if task['task_id'] == task_id), None)
+            if ip_address:
+                with ip_lock:
+                    current_processing_ips.discard(ip_address)
+                logger.info(f"IP {ip_address} 的请求已从处理列表中移除（任务状态：{status}）")
 
 def set_model_and_lora(task):
     options_payload = {
@@ -165,7 +209,7 @@ def set_model_and_lora(task):
     except requests.exceptions.RequestException as e:
         raise Exception(f"设置模型和LoRA失败: {str(e)}")
 
-def generate_images(task):
+def generate_images(task, timeout_event):
     set_model_and_lora(task)
 
     payload = {
@@ -240,7 +284,7 @@ def generate_images(task):
     new_topic_start_time = datetime.now().isoformat()
 
     update_task_status(task['task_id'], "所有图片生成完成", 100)
-    return seeds, saved_files, new_topic_start_time
+    return {'seeds': seeds, 'file_names': saved_files, 'save_time': new_topic_start_time}
 
 def check_prompt_with_chatgpt(prompt):
     try:
@@ -358,13 +402,12 @@ def generate():
             'num_images': data.get('num_images', 1),
             'seed': data.get('seed', -1),
             'ip_address': ip_address,
-            'user_id': session['user_id']  # 在这里添加用户ID
+            'user_id': session['user_id']
         }
 
         if task_queue.qsize() >= MAX_QUEUE_SIZE:
             with ip_lock:
                 current_processing_ips.discard(ip_address)
-                logger.info(f"由于队列已满,移除 IP {ip_address} 的处理中请求")
             logger.warning(f"队列已满 (当前大小: {task_queue.qsize()}/{MAX_QUEUE_SIZE}), 拒绝新请求")
             return jsonify({"error": "队列已满，请稍后再试", "queue_size": task_queue.qsize(), "max_queue_size": MAX_QUEUE_SIZE}), 429
 
@@ -372,25 +415,26 @@ def generate():
         task_queue.put(task)
         task_status[task_id] = {"status": "排队中" if queue_position > 0 else "处理中", "progress": 0, "queuePosition": queue_position}
         logger.info(f"任务 {task_id} 已加入队列,位置: {queue_position}/{MAX_QUEUE_SIZE}")
-        logger.info(f"当前队列状态: {task_status}")
 
         if queue_position == 0:
             logger.info(f"立即开始处理任务 {task_id} (用户: {task['user_id']}, IP: {ip_address})")
             threading.Thread(target=process_task, args=(task, task['user_id'], ip_address)).start()
+        else:
+            # 如果任务进入队列，我们需要确保 IP 仍然被标记为处理中
+            logger.info(f"任务 {task_id} 进入队列，IP {ip_address} 保持在处理列表中")
 
         return jsonify({
             "task_id": task_id, 
             "queuePosition": queue_position,
             "status": "排队中" if queue_position > 0 else "处理中",
             "max_queue_size": MAX_QUEUE_SIZE
-        }), 202  # 使用 202 Accepted 状态码表示请求已被接受但尚未处理完成
+        }), 202
+
     except Exception as e:
         logger.error(f"处理任务时出错 (用户: {session['user_id']}, IP: {ip_address}): {str(e)}", exc_info=True)
-        return jsonify({"error": "处理任务时出现错误，请稍后重试。", "error_details": str(e)}), 500
-    finally:
         with ip_lock:
             current_processing_ips.discard(ip_address)
-            logger.info(f"IP {ip_address} 的请求已从处理列表中移除")
+        return jsonify({"error": "处理任务时出现错误，请稍后重试。", "error_details": str(e)}), 500
 
 @app.route('/sd/status/<task_id>', methods=['GET'])
 @require_auth
@@ -532,7 +576,7 @@ def get_user_info():
     logger.debug(f"返回用户信息: {safe_user_info}")
     return jsonify(safe_user_info)
 
-def inpaint_image(task):
+def inpaint_image(task, timeout_event):
     task_id = task['task_id']
     logger.info(f"开始重绘任务: task_id={task_id}")
     update_task_status(task_id, "重中...", 0)
