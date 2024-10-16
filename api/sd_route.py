@@ -1,3 +1,10 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from app import app
+from auth import require_auth, login, auth_complete, refresh_access_token, logout
+
 from flask import Flask, request, jsonify, send_from_directory, make_response, session, redirect, url_for
 from flask_cors import CORS
 import requests
@@ -20,9 +27,6 @@ from dotenv import load_dotenv
 import secrets
 from urllib.parse import urlencode
 
-# 导入 auth.py 中的函数
-from auth import require_auth, login, auth_complete, refresh_access_token, logout
-
 # 禁用SSL警告（仅用于测试环境）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -30,7 +34,6 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
 # 设置 secret key
@@ -78,14 +81,17 @@ ip_lock = threading.Lock()
 
 def update_queue_positions():
     with task_lock:
+        logger.info(f"更新队列位置前的状态: {task_status}")
         for i, task in enumerate(list(task_queue.queue)):
             task_id = task['task_id']
             if task_id in task_status and task_status[task_id]['status'] == "排队中":
                 task_status[task_id]['queuePosition'] = i
+                logger.info(f"更新任务 {task_id} 的队列位置为 {i}")
+        logger.info(f"更新队列位置后的状态: {task_status}")
 
 def process_task(task, user_id, ip_address):
     task_id = task['task_id']
-    logger.info(f"Processing task {task_id} for user {user_id}")
+    logger.info(f"开始处理任务 {task_id} (用户: {user_id}, IP: {ip_address})")
     
     try:
         if task['type'] == 'inpaint':
@@ -116,23 +122,32 @@ def process_task(task, user_id, ip_address):
     finally:
         with task_lock:
             if not task_queue.empty():
-                task_queue.get()
+                completed_task = task_queue.get()
+                logger.info(f"从队列中移除已完成的任务 {completed_task['task_id']}")
             current_task = None
         if ENABLE_IP_RESTRICTION:
             with ip_lock:
                 active_ip_requests.pop(ip_address, None)
+                logger.info(f"IP {ip_address} 的请求已从活跃列表中移除")
         update_queue_positions()
+        logger.info(f"更新队列位置后的状态: {task_status}")
         if not task_queue.empty():
             next_task = task_queue.queue[0]
             next_ip = next_task.get('ip_address', 'unknown')
-            logger.info(f"Starting next task in queue: {next_task['task_id']}")
-            threading.Thread(target=process_task, args=(next_task, session['user_id'], next_ip)).start()
+            next_user_id = next_task.get('user_id', 'unknown')
+            logger.info(f"开始处理队列中的下一个任务: {next_task['task_id']} (用户: {next_user_id}, IP: {next_ip})")
+            threading.Thread(target=process_task, args=(next_task, next_user_id, next_ip)).start()
+        else:
+            logger.info("任务队列现在为空")
+
+        logger.info(f"任务 {task_id} 处理完成")
 
 def update_task_status(task_id, status, progress, **kwargs):
     with task_lock:
         task_status[task_id] = {
             "status": status,
             "progress": progress,
+            "user_id": kwargs.get('user_id', 'unknown'),  # 使用传入的用户ID
             **kwargs
         }
 
@@ -296,7 +311,7 @@ def generate():
         return jsonify({"error": "无法获取用户信息"}), 403
 
     if not user_info.get('active', False) or user_info.get('silenced', False) or user_info.get('trust_level', 0) < 2:
-        logger.warning(f"用户 {user_info.get('id')} 没有权限生成图片")
+        logger.warning(f"用户 {user_info.get('id')} 没有权限生成图片. 活跃状态: {user_info.get('active')}, 禁言状态: {user_info.get('silenced')}, 信任等级: {user_info.get('trust_level')}")
         return jsonify({"error": "您没有权限使用此功能"}), 403
     
     data = request.json
@@ -308,19 +323,26 @@ def generate():
     if ENABLE_IP_RESTRICTION:
         with ip_lock:
             if ip_address in active_ip_requests:
+                logger.warning(f"IP {ip_address} 已有活跃请求,拒绝新请求")
                 return jsonify({"error": "您已有一个活跃请求，请等待当前请求完成后再试"}), 429
             active_ip_requests[ip_address] = True
+            logger.info(f"IP {ip_address} 的请求已加入活跃列表")
 
     prompt = data.get('prompt', '')
     if not prompt:
+        logger.warning("收到空提示词")
         return jsonify({"error": "提示词不能为空"}), 400
 
     try:
+        logger.info(f"开始检查提示词: {prompt}")
         contains_inappropriate_content = check_prompt_with_chatgpt(prompt)
         if contains_inappropriate_content:
+            logger.warning(f"提示词 '{prompt}' 被判定为不适当内容")
             return jsonify({"error": "提示词可能包含不适当的内容。请修改后重试。"}), 400
 
+        logger.info("开始翻译提示词")
         translated_prompt = translate_to_english(prompt)
+        logger.info(f"翻译后的提示词: {translated_prompt}")
 
         model_params = SD_MODEL
         if data.get('lora', False):
@@ -342,34 +364,51 @@ def generate():
             'height': data.get('height', 512),
             'num_images': data.get('num_images', 1),
             'seed': data.get('seed', -1),
-            'ip_address': ip_address
+            'ip_address': ip_address,
+            'user_id': session['user_id']  # 在这里添加用户ID
         }
 
         if task_queue.qsize() >= MAX_QUEUE_SIZE:
             if ENABLE_IP_RESTRICTION:
                 with ip_lock:
                     del active_ip_requests[ip_address]
-            return jsonify({"error": "队列已满，请稍后再试"}), 429
+                    logger.info(f"由于队列已满,移除 IP {ip_address} 的活跃请求")
+            logger.warning(f"队列已满 (当前大小: {task_queue.qsize()}/{MAX_QUEUE_SIZE}), 拒绝新请求")
+            return jsonify({"error": "队列已满，请稍后再试", "queue_size": task_queue.qsize(), "max_queue_size": MAX_QUEUE_SIZE}), 429
 
         queue_position = task_queue.qsize()
         task_queue.put(task)
         task_status[task_id] = {"status": "排队中" if queue_position > 0 else "处理中", "progress": 0, "queuePosition": queue_position}
+        logger.info(f"任务 {task_id} 已加入队列,位置: {queue_position}/{MAX_QUEUE_SIZE}")
+        logger.info(f"当前队列状态: {task_status}")
 
         if queue_position == 0:
-            threading.Thread(target=process_task, args=(task, session['user_id'], ip_address)).start()
+            logger.info(f"立即开始处理任务 {task_id} (用户: {task['user_id']}, IP: {ip_address})")
+            threading.Thread(target=process_task, args=(task, task['user_id'], ip_address)).start()
 
-        return jsonify({"task_id": task_id, "queuePosition": queue_position})
+        return jsonify({
+            "task_id": task_id, 
+            "queuePosition": queue_position,
+            "status": "排队中" if queue_position > 0 else "处理中",
+            "max_queue_size": MAX_QUEUE_SIZE
+        }), 202  # 使用 202 Accepted 状态码表示请求已被接受但尚未处理完成
     except Exception as e:
-        logger.error(f"处理提示词时出错: {str(e)}")
-        return jsonify({"error": "处理提示词时出现错误，请稍后重试。"}), 500
+        logger.error(f"处理任务时出错 (用户: {session['user_id']}, IP: {ip_address}): {str(e)}", exc_info=True)
+        return jsonify({"error": "处理任务时出现错误，请稍后重试。", "error_details": str(e)}), 500
+    finally:
+        if ENABLE_IP_RESTRICTION:
+            with ip_lock:
+                active_ip_requests.pop(ip_address, None)
+                logger.info(f"IP {ip_address} 的请求已从活跃列表中移除")
 
 @app.route('/sd/status/<task_id>', methods=['GET'])
 @require_auth
 def get_status(task_id):
-    logger.info(f"Received status request for task {task_id}")
+    logger.info(f"收到任务状态请求: task_id={task_id}")
     status = task_status.get(task_id, {"status": "未知任务", "progress": 0})
     if status["status"] == "排队中":
         status["queuePosition"] = next((i for i, task in enumerate(list(task_queue.queue)) if task['task_id'] == task_id), -1)
+    logger.info(f"返回任务状态: task_id={task_id}, status={status}")
     return jsonify(status)
 
 @app.route('/images/sd/<task_id>/<path:filename>')
@@ -492,7 +531,8 @@ def get_user_info():
         "name": user_info.get('name'),
         "active": user_info.get('active'),
         "trust_level": user_info.get('trust_level'),
-        "silenced": user_info.get('silenced')
+        "silenced": user_info.get('silenced'),
+        "avatar_url": user_info.get('avatar_url')
     }
     logger.debug(f"返回用户信息: {safe_user_info}")
     return jsonify(safe_user_info)
@@ -629,7 +669,7 @@ def inpaint_image(task):
 
 # 使用从 auth.py 导入的函数
 app.route('/login')(login)
-app.route('/auth/complete')(auth_complete)
+app.add_url_rule('/auth/complete', 'auth_complete', auth_complete)
 app.route('/logout')(require_auth(logout))
 
 # 在文件顶部添加这个标志
@@ -653,5 +693,5 @@ with app.app_context():
     log_startup_info()
 
 if __name__ == '__main__':
-    logger.info(f"启动服务器,端口 25001, AUTH_SERVICE_URL: {AUTH_SERVICE_URL}")
-    app.run(host='0.0.0.0', port=25001, threaded=True)
+    port = int(os.getenv('SD_ROUTE_PORT', 25001))  # 默认为 25001，如果环境变量未设置
+    app.run(host='0.0.0.0', port=port, debug=True)
