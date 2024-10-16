@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from app import app
@@ -75,8 +75,8 @@ task_status = {}
 current_task = None
 task_lock = threading.Lock()
 
-# 添加一个字典来跟踪 IP 地址的活跃请求
-active_ip_requests = {}
+# 在文件顶部添加这个集合来跟踪当前处理中的 IP
+current_processing_ips = set()
 ip_lock = threading.Lock()
 
 def update_queue_positions():
@@ -120,15 +120,9 @@ def process_task(task, user_id, ip_address):
         logger.error(f"Error processing task {task_id}: {str(e)}")
         update_task_status(task_id, f"失败: {str(e)}", 100, user_id=user_id)
     finally:
-        with task_lock:
-            if not task_queue.empty():
-                completed_task = task_queue.get()
-                logger.info(f"从队列中移除已完成的任务 {completed_task['task_id']}")
-            current_task = None
-        if ENABLE_IP_RESTRICTION:
-            with ip_lock:
-                active_ip_requests.pop(ip_address, None)
-                logger.info(f"IP {ip_address} 的请求已从活跃列表中移除")
+        with ip_lock:
+            current_processing_ips.discard(ip_address)
+            logger.info(f"IP {ip_address} 的请求已从处理列表中移除")
         update_queue_positions()
         logger.info(f"更新队列位置后的状态: {task_status}")
         if not task_queue.empty():
@@ -320,20 +314,19 @@ def generate():
     ip_address = get_client_ip()
     logger.info(f"请求 IP 地址: {ip_address}")
 
-    if ENABLE_IP_RESTRICTION:
-        with ip_lock:
-            if ip_address in active_ip_requests:
-                logger.warning(f"IP {ip_address} 已有活跃请求,拒绝新请求")
-                return jsonify({"error": "您已有一个活跃请求，请等待当前请求完成后再试"}), 429
-            active_ip_requests[ip_address] = True
-            logger.info(f"IP {ip_address} 的请求已加入活跃列表")
-
-    prompt = data.get('prompt', '')
-    if not prompt:
-        logger.warning("收到空提示词")
-        return jsonify({"error": "提示词不能为空"}), 400
+    with ip_lock:
+        if ip_address in current_processing_ips:
+            logger.warning(f"IP {ip_address} 已有处理中的请求，拒绝新请求")
+            return jsonify({"error": "您已有一个正在处理的请求，请等待当前请求完成后再试"}), 429
+        current_processing_ips.add(ip_address)
+        logger.info(f"IP {ip_address} 的请求已加入处理列表")
 
     try:
+        prompt = data.get('prompt', '')
+        if not prompt:
+            logger.warning("收到空提示词")
+            return jsonify({"error": "提示词不能为空"}), 400
+
         logger.info(f"开始检查提示词: {prompt}")
         contains_inappropriate_content = check_prompt_with_chatgpt(prompt)
         if contains_inappropriate_content:
@@ -369,10 +362,9 @@ def generate():
         }
 
         if task_queue.qsize() >= MAX_QUEUE_SIZE:
-            if ENABLE_IP_RESTRICTION:
-                with ip_lock:
-                    del active_ip_requests[ip_address]
-                    logger.info(f"由于队列已满,移除 IP {ip_address} 的活跃请求")
+            with ip_lock:
+                current_processing_ips.discard(ip_address)
+                logger.info(f"由于队列已满,移除 IP {ip_address} 的处理中请求")
             logger.warning(f"队列已满 (当前大小: {task_queue.qsize()}/{MAX_QUEUE_SIZE}), 拒绝新请求")
             return jsonify({"error": "队列已满，请稍后再试", "queue_size": task_queue.qsize(), "max_queue_size": MAX_QUEUE_SIZE}), 429
 
@@ -396,10 +388,9 @@ def generate():
         logger.error(f"处理任务时出错 (用户: {session['user_id']}, IP: {ip_address}): {str(e)}", exc_info=True)
         return jsonify({"error": "处理任务时出现错误，请稍后重试。", "error_details": str(e)}), 500
     finally:
-        if ENABLE_IP_RESTRICTION:
-            with ip_lock:
-                active_ip_requests.pop(ip_address, None)
-                logger.info(f"IP {ip_address} 的请求已从活跃列表中移除")
+        with ip_lock:
+            current_processing_ips.discard(ip_address)
+            logger.info(f"IP {ip_address} 的请求已从处理列表中移除")
 
 @app.route('/sd/status/<task_id>', methods=['GET'])
 @require_auth
@@ -450,17 +441,18 @@ def inpaint():
     ip_address = get_client_ip()
     logger.info(f"请求 IP 地址: {ip_address}")
 
-    if ENABLE_IP_RESTRICTION:
-        with ip_lock:
-            if ip_address in active_ip_requests:
-                return jsonify({"error": "您已有一个活跃请求，请等待当前请求完成后再试"}), 429
-            active_ip_requests[ip_address] = True
-
-    prompt = data.get('prompt', '')
-    if not prompt:
-        return jsonify({"error": "提示词不能为空"}), 400
+    with ip_lock:
+        if ip_address in current_processing_ips:
+            logger.warning(f"IP {ip_address} 已有处理中的请求，拒绝新请求")
+            return jsonify({"error": "您已有一个正在处理的请求，请等待当前请求完成后再试"}), 429
+        current_processing_ips.add(ip_address)
+        logger.info(f"IP {ip_address} 的请求已加入处理列表")
 
     try:
+        prompt = data.get('prompt', '')
+        if not prompt:
+            return jsonify({"error": "提示词不能为空"}), 400
+
         contains_inappropriate_content = check_prompt_with_chatgpt(prompt)
         if contains_inappropriate_content:
             return jsonify({"error": "提示词可能包含不适当的内。请修改后重试。"}), 400
@@ -491,9 +483,8 @@ def inpaint():
             task['model'] += f"<lora:{lora_name}:{lora_weight}>"
 
         if task_queue.qsize() >= MAX_QUEUE_SIZE:
-            if ENABLE_IP_RESTRICTION:
-                with ip_lock:
-                    del active_ip_requests[ip_address]
+            with ip_lock:
+                current_processing_ips.discard(ip_address)
             return jsonify({"error": "队列已满，请稍后试"}), 429
 
         queue_position = task_queue.qsize()
@@ -507,6 +498,10 @@ def inpaint():
     except Exception as e:
         logger.error(f"处理提示词时出错: {str(e)}")
         return jsonify({"error": "处理提示词时出现错误，请稍后重试。"}), 500
+    finally:
+        with ip_lock:
+            current_processing_ips.discard(ip_address)
+            logger.info(f"IP {ip_address} 的请求已从处理列表中移除")
 
 @app.route('/sd/task_status/<task_id>', methods=['GET'])
 @require_auth
