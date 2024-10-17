@@ -8,7 +8,7 @@ import base64
 from PIL import Image
 import os
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 import threading
 import time
 import json
@@ -253,7 +253,7 @@ def generate_images(task):
     new_topic_start_time = datetime.now().isoformat()
     # try:
     #     insert_topic(f'sd_{prompt}', new_topic_start_time, phone_number)
-    #     logger.info("成功将prompt保存为新的topic")
+    #     logger.info("成功将prompt保存为的topic")
 
     #     dialog_assistant = {
     #         "model": model,
@@ -287,7 +287,7 @@ def check_prompt_with_chatgpt(prompt):
             return False
 
         result = response.choices[0].message.content.strip().lower()
-        # logger.info(f"ChatGPT 审核结果: {result}")
+        # logger.info(f"ChatGPT 审核结: {result}")
         return result == '是'
     except Exception as e:
         # logger.error(f"ChatGPT API调用错误: {str(e)}")
@@ -335,33 +335,37 @@ def log_request_info():
 def require_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        access_token = request.cookies.get('access_token') or session.get('access_token')
+        token = request.cookies.get('access_token') or session.get('access_token')
         
-        if not access_token:
-            logger.warning("需要认证：未找到访问令牌")
-            return jsonify({"error": "Authentication required"}), 401
-        
-        logger.info("验证访问令牌")
-        logger.info(f"访问令牌: {access_token}")
-        
-        # 使用 /oauth/userinfo 端点来验证令牌
-        verify_response = requests.post(f"{AUTH_SERVICE_URL}/oauth/verify", 
-                                        json={"access_token": access_token})
-        
-        if verify_response.status_code != 200:
-            logger.warning("无效或过期的令牌")
-            session.clear()
-            response = make_response(jsonify({"error": "Invalid or expired token", "auth_url": url_for('login', _external=True)}), 401)
-            response.delete_cookie('access_token')
-            return response
-        
-        user_info = verify_response.json()
-        session['user_id'] = user_info['user_info']['id']
-        session['user_info'] = user_info['user_info']
-        session['token_expiry'] = user_info['token_expiry']
-        session['access_token'] = access_token  # 更新 session 中的 access_token
-        
+        if not token:
+            return jsonify({"error": "认证令牌缺失", "auth_url": url_for('login', _external=True)}), 401
+
+        try:
+            # 解码和验证 token
+            payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            user_info = payload.get('user_info', {})
+            
+            # 更新 session 中的用户信息
+            session['user_info'] = user_info
+            session['user_id'] = user_info.get('id')
+        except jwt.ExpiredSignatureError:
+            # Token 过期，尝试刷新
+            new_token = refresh_access_token()
+            if new_token:
+                # 如果刷新成功，更新 session 和 cookie
+                session['access_token'] = new_token
+                response = make_response(f(*args, **kwargs))
+                response.set_cookie('access_token', new_token, 
+                                    max_age=3600*24*7, httponly=True, secure=True, samesite='Strict')
+                return response
+            else:
+                # 如果刷新失败，返回到登录页面
+                return jsonify({"error": "认证令牌已过期", "auth_url": url_for('login', _external=True)}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "无效的认证令牌", "auth_url": url_for('login', _external=True)}), 401
+
         return f(*args, **kwargs)
+
     return decorated
 
 def check_token(token):
@@ -382,7 +386,7 @@ def generate():
     logger.info("收到生成图片请求")
     user_info = session.get('user_info', {})
     if not user_info:
-        logger.warning(f"用户 {session.get('user_id')} 的会话中没有用户信息")
+        logger.warning(f"用户的会话中没有用户信息")
         return jsonify({"error": "无法获取用户信息"}), 403
 
     if not user_info.get('active', False) or user_info.get('silenced', False) or user_info.get('trust_level', 0) < 2:
@@ -477,7 +481,7 @@ def encode_image_to_base64(image_path):
         return base64.b64encode(image_file.read()).decode('utf-8')
 
 # 假设我们有一个全局变量来控制调试模式
-DEBUG_MODE = True  # 在生产环境中应设置为 False
+DEBUG_MODE = True  # 在生产环境中应设置 False
 
 def save_debug_image(image_data, filename):
     if not DEBUG_MODE:
@@ -498,8 +502,14 @@ def get_image_dimensions(image_data):
 @require_auth
 def inpaint():
     logger.info("收到图片重绘请求")
-    if not session['active'] or session['silenced'] or session['trust_level'] < 2:
-        logger.warning(f"用户 {session['user_id']} 没有权限使用重绘功能")
+    
+    user_info = session.get('user_info', {})
+    if not user_info:
+        logger.warning("无法获取用户信息")
+        return jsonify({"error": "无法获取用户信息"}), 403
+
+    if not user_info.get('active', False) or user_info.get('silenced', False) or user_info.get('trust_level', 0) < 2:
+        logger.warning(f"用户 {user_info.get('id')} 没有权限使用重绘功能")
         return jsonify({"error": "您没有权限使用此功能"}), 403
     
     data = request.json
@@ -576,7 +586,7 @@ def get_task_status(task_id):
     logger.info(f"获取任务状态: task_id={task_id}, status={status}")
     return jsonify(status)
 
-# 新增路由：获取当前用户��息
+# 新增路由：获取当前用户息
 @app.route('/user/info', methods=['GET'])
 @require_auth
 def get_user_info():
@@ -590,6 +600,7 @@ def get_user_info():
     safe_user_info = {
         "id": user_info.get('id'),
         "username": user_info.get('username'),
+        "avatar_url": user_info.get('avatar_url'),
         "name": user_info.get('name'),
         "active": user_info.get('active'),
         "trust_level": user_info.get('trust_level'),
@@ -598,7 +609,7 @@ def get_user_info():
     logger.debug(f"返回用户信息: {safe_user_info}")
     return jsonify(safe_user_info)
 
-# 修改 inpaint_image 函数以返回结果而不是直接响应
+# 修改 inpaint_image 函数以返回结果不是直接响应
 def inpaint_image(task):
     task_id = task['task_id']
     logger.info(f"开始重绘任务: task_id={task_id}")
@@ -758,39 +769,42 @@ def auth_complete():
 
     user_data = user_info_response.json()
     
-    logger.info(f"用户 {user_data['user_info']['id']} 认证成功")
+    # 保存 access token 和 refresh token
     session['access_token'] = user_data['access_token']
     session['refresh_token'] = user_data['refresh_token']
     session['token_expiry'] = user_data['token_expiry']
     session['user_info'] = user_data['user_info']
     session['user_id'] = user_data['user_info']['id']
+    session['user_name'] = user_data['user_info']['username']
+    
 
     response = make_response(redirect(url_for('index')))
     response.set_cookie('access_token', user_data['access_token'], 
-                        max_age=3600*24*7, httponly=False, secure=True, samesite='Strict')
-    response.set_cookie('auth_success', 'true', 
-                        max_age=300, httponly=False, secure=True, samesite='Strict')
+                        max_age=3600*24*7, httponly=True, secure=True, samesite='Strict')
     
     logger.info(f"认证完成，重定向到首页")
     return response
 
 def refresh_access_token():
-    if 'refresh_token' not in session:
-        logger.warning("没有可用的刷新令牌")
-        return False
+    refresh_token = session.get('refresh_token')
+    if not refresh_token:
+        return None
 
-    logger.info("尝试刷新访问令牌")
-    refresh_response = requests.post(f"{AUTH_SERVICE_URL}/oauth/refresh", 
-                                     json={"refresh_token": session['refresh_token']})
-    if refresh_response.status_code == 200:
-        new_token_data = refresh_response.json()
-        session['access_token'] = new_token_data['access_token']
-        session['refresh_token'] = new_token_data.get('refresh_token', session['refresh_token'])
-        session['token_expiry'] = new_token_data['expires_in']
-        logger.info("访问令牌刷新成功")
-        return True
-    logger.warning("刷新访问令牌失败")
-    return False
+    try:
+        # 向认证服务发送刷新请求
+        response = requests.post(f"{AUTH_SERVICE_URL}/oauth/refresh", 
+                                 json={"refresh_token": refresh_token})
+        if response.status_code == 200:
+            new_token_data = response.json()
+            # 更新 session 中的 token 信息
+            session['access_token'] = new_token_data['access_token']
+            session['refresh_token'] = new_token_data.get('refresh_token', refresh_token)
+            session['token_expiry'] = new_token_data['token_expiry']
+            return new_token_data['access_token']
+        else:
+            return None
+    except requests.RequestException:
+        return None
 
 @app.route('/logout')
 @require_auth

@@ -5,7 +5,7 @@ import { apiRequest, setToken, clearToken } from './api.js';
 
 export const apiUrl = '';  // 替换为实际的 API URL
 
-const DEBUG_MODE = true;  // 设置为 true 以启用更多日志
+const DEBUG_MODE = false;  // 设置为 true 以启用更多日志
 let currentTaskId = null;
 let taskQueue = [];
 let statusCheckInterval = null;
@@ -142,6 +142,7 @@ export function handleCallback() {
 
 export function initSD() {
     console.debug('初始化SD模块');
+    initDebugMode(); // 添加这行
     generateBtn = document.getElementById('sd-generate-btn');
     if (generateBtn) {
         generateBtn.addEventListener('click', generateImages);
@@ -419,11 +420,21 @@ console.debug('sd.js 模块加载完成');
 window.checkAuthStatus = checkAuthStatus;
 
 function updateDebugLog(message) {
-    const logElement = document.getElementById('debug-log');
-    if (logElement) {
-        const timestamp = new Date().toISOString();
-        logElement.value += `${timestamp}: ${message}\n`;
-        logElement.scrollTop = logElement.scrollHeight;
+    if (DEBUG_MODE) {
+        const logElement = document.getElementById('debug-log');
+        if (logElement) {
+            const timestamp = new Date().toISOString();
+            logElement.value += `${timestamp}: ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+        console.debug(message); // 在调试模式下也输出到控制台
     }
-    console.debug(message); // 同时在控制台输出日志
+}
+
+// 在文件开头或初始化函数中添加这段代码
+function initDebugMode() {
+    const debugLogElement = document.getElementById('debug-log');
+    if (debugLogElement) {
+        debugLogElement.style.display = DEBUG_MODE ? 'block' : 'none';
+    }
 }
