@@ -134,14 +134,30 @@ function displayUserInfo(userData) {
     const authSection = document.getElementById('auth-section');
     if (authSection) {
         authSection.innerHTML = `
-            <div class="user-info">
-                <img class="avatar" src="${userData.avatar_url}" alt="头像">
-                <span class="username">${userData.name || userData.username}</span>
-                <button id="logout-btn">登出</button>
+            <div class="user-info-container">
+                <div class="avatar-container">
+                    <img class="avatar" src="${userData.avatar_url}" alt="头像">
+                </div>
+                <div class="user-details">
+                    <span class="username">${userData.name || userData.username}</span>
+                    <button id="logout-btn">登出</button>
+                </div>
             </div>
         `;
-        document.getElementById('logout-btn').addEventListener('click', logout);
         
+        const avatarContainer = authSection.querySelector('.avatar-container');
+        const userDetails = authSection.querySelector('.user-details');
+        
+        avatarContainer.addEventListener('click', (e) => {
+            e.stopPropagation();
+            userDetails.classList.add('show');
+        });
+        
+        document.addEventListener('click', () => {
+            userDetails.classList.remove('show');
+        });
+        
+        document.getElementById('logout-btn').addEventListener('click', logout);
     } else {
         console.error('未找到 auth-section 元素');
     }
@@ -427,7 +443,7 @@ function displayImages(taskId, fileNames, seeds, translatedPrompt) {
         img.className = 'sd-image';
         img.dataset.taskId = taskId;
         img.addEventListener('click', () => openPreviewWindow(img.src, taskId));
-        // 设置图片的最大宽度，确保它们不会太大
+        // 设置���片的最大宽度，确保它们不会太大
         img.style.maxWidth = '100%';
         img.style.height = 'auto';
 
