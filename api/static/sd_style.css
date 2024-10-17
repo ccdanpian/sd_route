@@ -253,3 +253,43 @@ h1 {
 #logout-btn:hover {
     background-color: #d32f2f;
 }
+
+.user-info-container {
+    position: relative;
+    overflow: hidden;
+}
+
+.avatar-container {
+    cursor: pointer;
+}
+
+.avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+}
+
+.user-details {
+    position: absolute;
+    top: 0;
+    left: -200px;
+    width: 200px;
+    height: 100%;
+    background-color: #f0f0f0;
+    transition: left 0.3s ease;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+}
+
+.user-details.show {
+    left: 40px;
+}
+
+.username {
+    margin-right: 10px;
+}
+
+#logout-btn {
+    margin-left: auto;
+}
