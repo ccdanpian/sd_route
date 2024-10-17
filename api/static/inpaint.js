@@ -333,6 +333,7 @@ function displayInpaintedImage(imageUrl, inpaintPrompt) {
         resultContainer.style.border = '1px solid #ccc';
         resultContainer.style.padding = '10px';
         resultContainer.style.borderRadius = '5px';
+        resultContainer.style.display = 'block';
         
         // 在原图下方插入结果容器
         const originalImage = document.querySelector('img'); // 假设原图是页面中的第一个img元素
