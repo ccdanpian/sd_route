@@ -32,6 +32,7 @@ export async function apiRequest(url, method = 'GET', data = null) {
     const config = {
         method,
         headers,
+        credentials: 'include'
     };
 
     if (data) {
@@ -40,10 +41,15 @@ export async function apiRequest(url, method = 'GET', data = null) {
 
     try {
         const response = await fetch(url, config);
+        const responseData = await response.json();
+        
         if (!response.ok) {
-            throw new Error('Network response was not ok');
+            const error = new Error('API request failed');
+            error.response = responseData;
+            throw error;
         }
-        return await response.json();
+        
+        return responseData;
     } catch (error) {
         console.error('API request failed:', error);
         throw error;
