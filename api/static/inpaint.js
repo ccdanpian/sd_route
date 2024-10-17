@@ -325,10 +325,10 @@ function displayInpaintedImage(imageUrl, inpaintPrompt) {
     const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${baseUrl}${imageUrl}`;
     
     // 创建重绘结果容器
-    let resultContainer = document.getElementById('inpaintResultContainer');
+    let resultContainer = document.getElementById('inpaint-container');
     if (!resultContainer) {
         resultContainer = document.createElement('div');
-        resultContainer.id = 'inpaintResultContainer';
+        resultContainer.id = 'inpaint-container';
         resultContainer.style.marginTop = '20px';
         resultContainer.style.border = '1px solid #ccc';
         resultContainer.style.padding = '10px';
