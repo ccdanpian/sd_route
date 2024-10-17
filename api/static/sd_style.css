@@ -9,12 +9,17 @@ body, html {
     max-width: 100%;
     padding: 20px;
     box-sizing: border-box;
+    padding-top: 50px; /* 为固定位置的标题腾出空间 */
 }
 
 h1 {
-    margin-top: 0;
-    margin-bottom: 20px;
-    text-align: center;
+    position: fixed;
+    top: 10px;
+    left: 20px;
+    margin: 0;
+    font-size: 24px;
+    text-align: left;
+    z-index: 1001; /* 确保标题在其他元素之上 */
 }
 
 #sd-image-generation-container {
@@ -69,6 +74,7 @@ h1 {
 @media (max-width: 768px) {
     .container {
         padding: 0;
+        padding-top: 50px; /* 在移动设备上稍微减少顶部内边距 */
     }
 
     #sd-image-generation-container {
@@ -85,9 +91,10 @@ h1 {
     }
 
     h1 {
-        margin-top: 10px;
-        margin-bottom: 10px;
         font-size: 20px;
+        top: 10px;
+        left: 10px;
+        bottom: 20px;        
     }
 }
 
