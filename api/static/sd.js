@@ -5,7 +5,7 @@ import { apiRequest, setToken, clearToken } from './api.js';
 
 export const apiUrl = '';  // 替换为实际的 API URL
 
-const DEBUG_MODE = false;  // 设置为 true 以启用更多日志
+const DEBUG_MODE = true;  // 设置为 true 以启用更多日志
 let currentTaskId = null;
 let taskQueue = [];
 let statusCheckInterval = null;
@@ -18,23 +18,35 @@ console.debug('sd.js 模块开始加载');  // 使用 console.debug 替代 conso
 
 export function checkAuthStatus() {
     console.log('正在检查认证状态');
-    const token = getCookie('access_token') || localStorage.getItem('access_token');
-    if (token) {
-        console.log('找到访问令牌');
-        localStorage.setItem('access_token', token);  // 将 token 保存到 localStorage 中
-        setToken(token);
-        fetchUserInfo();
-    } else {
-        console.log('未找到访问令牌，显示登录按钮');
-        showLoginButton();
-    }
+    updateDebugLog('正在检查认证状态');
+    
+    setTimeout(() => {
+        const token = getCookie('access_token') || localStorage.getItem('access_token');
+        if (token) {
+            console.log('找到访问令牌');
+            updateDebugLog('找到访问令牌');
+            localStorage.setItem('access_token', token);
+            setToken(token);
+            fetchUserInfo();
+        } else {
+            console.log('未找到访问令牌，显示登录按钮');
+            updateDebugLog('未找到访问令牌显示登录按钮');
+            showLoginButton();
+        }
+    }, 500); // 500ms 延迟
 }
 
 function showLoginButton() {
     const authSection = document.getElementById('auth-section');
     if (authSection) {
-        authSection.innerHTML = '<button id="login-btn">登录</button>';
-        document.getElementById('login-btn').addEventListener('click', login);
+        // 确保先清除现有的用户信息
+        clearUserInfo();
+        
+        const loginButton = document.createElement('button');
+        loginButton.id = 'login-btn';
+        loginButton.textContent = '登录';
+        loginButton.addEventListener('click', login);
+        authSection.appendChild(loginButton);
     } else {
         console.error('未找到 auth-section 元素');
     }
@@ -46,23 +58,52 @@ export function login() {
 }
 
 function logout() {
-    console.debug('Logging out...');
+    console.debug('正在登出...');
     apiRequest('/logout', 'GET')
         .then(data => {
             if (data.success) {
-                console.debug('Logout successful');
+                console.debug('登出成功:', data.message);
                 clearToken();
                 localStorage.removeItem('access_token');
                 isAuthenticated = false;
+                clearUserInfo();
                 showLoginButton();
                 updateUIForAuth();
             } else {
-                console.error('Logout was not successful:', data);
+                console.warn('登出部分成功:', data.message);
+                updateDebugLog('登出警告:', data.message);
+                // 即使部分成功，也清理本地状态
+                clearToken();
+                localStorage.removeItem('access_token');
+                isAuthenticated = false;
+                clearUserInfo();
+                showLoginButton();
+                updateUIForAuth();
             }
         })
         .catch(error => {
-            console.error('Logout error:', error);
+            console.error('登出错误:', error);
+            updateDebugLog('登出错误:', error.message);
+            // 即使发生错误，也尝试清理本地状态
+            clearToken();
+            localStorage.removeItem('access_token');
+            isAuthenticated = false;
+            clearUserInfo();
+            showLoginButton();
+            updateUIForAuth();
         });
+}
+
+function clearUserInfo() {
+    const authSection = document.getElementById('auth-section');
+    if (authSection) {
+        const userInfo = authSection.querySelector('.user-info');
+        if (userInfo) {
+            userInfo.remove(); // 移除整个 user-info div
+        }
+    } else {
+        console.error('未找到 auth-section 元素');
+    }
 }
 
 function fetchUserInfo() {
@@ -71,15 +112,18 @@ function fetchUserInfo() {
         .then(data => {
             if (data.error) {
                 console.error('获取用户信息失败:', data.error);
+                updateDebugLog('获取用户信息失败:', data.error);
                 throw new Error(data.error);
             }
             console.debug('成功获取用户信息:', data);
+            updateDebugLog('成功获取用户信息:', data);
             isAuthenticated = true;
             updateUIForAuth(data);
             displayUserInfo(data);
         })
         .catch(error => {
             console.error('获取用户信息时出错:', error);
+            updateDebugLog('获取用户信息时出错:', error);
             isAuthenticated = false;
             updateUIForAuth();
             showLoginButton();
@@ -335,11 +379,18 @@ function finishCurrentTask() {
 function updateStatus(message, queuePosition, maxQueueSize) {
     const statusContainer = document.getElementById('sd-status-container');
     if (statusContainer) {
+        let statusText = '';
+        
         if (message === "排队中" && queuePosition !== undefined) {
-            statusContainer.textContent = `状态：正在排队，当前位置：${queuePosition + 1}`;
+            statusText = `状态：正在排队，当前位置：${queuePosition + 1}/${maxQueueSize}`;
+        } else if (typeof message === 'object' && message.error) {
+            // 处理错误对
+            statusText = `状态：生成失败：${message.error}`;
         } else {
-            statusContainer.textContent = `状态：${message}`;
+            statusText = `状态：${message}`;
         }
+        
+        statusContainer.textContent = statusText;
     } else {
         console.error('未找到 sd-status-container 元素');
     }
@@ -382,7 +433,7 @@ function displayImages(taskId, fileNames, seeds, translatedPrompt) {
 
         const seedInfo = document.createElement('div');
         seedInfo.textContent = `种子：${seeds[index]}`;
-        seedInfo.style.marginTop = '5px'; // 为种子信息添加一些上边距
+        seedInfo.style.marginTop = '5px'; // 为种信息添加一些上边距
 
         imageWrapper.appendChild(img);
         imageWrapper.appendChild(seedInfo);
