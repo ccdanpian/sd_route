@@ -80,12 +80,14 @@ task_lock = threading.Lock()
 active_ip_requests = {}
 ip_lock = threading.Lock()
 
-def update_queue_positions():
+def start_next_task():
     with task_lock:
-        for i, task in enumerate(list(task_queue.queue)):
-            task_id = task['task_id']
-            if task_id in task_status and task_status[task_id]['status'] == "排队中":
-                task_status[task_id]['queuePosition'] = i
+        if not task_queue.empty():
+            next_task = task_queue.queue[0]  # 获取但不移除下一个任务
+            next_ip = next_task.get('ip_address', 'unknown')
+            next_user_id = next_task.get('user_id', 'unknown')
+            threading.Thread(target=process_task, args=(next_task, next_user_id, next_ip)).start()
+            logger.info(f"Starting next task in queue: {next_task['task_id']}")
 
 def process_task(task, user_id, ip_address):
     task_id = task['task_id']
@@ -120,17 +122,21 @@ def process_task(task, user_id, ip_address):
     finally:
         with task_lock:
             if not task_queue.empty():
-                task_queue.get()
+                task_queue.get()  # 移除当前任务
+            global current_task
             current_task = None
         if ENABLE_IP_RESTRICTION:
             with ip_lock:
                 active_ip_requests.pop(ip_address, None)
         update_queue_positions()
-        if not task_queue.empty():
-            next_task = task_queue.queue[0]
-            next_ip = next_task.get('ip_address', 'unknown')
-            logger.info(f"Starting next task in queue: {next_task['task_id']}")
-            threading.Thread(target=process_task, args=(next_task, session['user_id'], next_ip)).start()
+        start_next_task()  # 调用新函数启动下一个任务
+
+def update_queue_positions():
+    with task_lock:
+        for i, task in enumerate(list(task_queue.queue)):
+            task_id = task['task_id']
+            if task_id in task_status and task_status[task_id]['status'] == "排队中":
+                task_status[task_id]['queuePosition'] = i
 
 def update_task_status(task_id, status, progress, **kwargs):
     with task_lock:
@@ -460,7 +466,8 @@ def generate():
             'height': data.get('height', 512),
             'num_images': data.get('num_images', 1),
             'seed': data.get('seed', -1),
-            'ip_address': ip_address
+            'ip_address': ip_address,
+            'user_id': session['user_id']  # 添加用户ID到任务中
         }
 
         if task_queue.qsize() >= MAX_QUEUE_SIZE:
