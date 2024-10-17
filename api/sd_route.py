@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory, make_response, session, redirect, url_for
+from flask import Flask, request, jsonify, send_from_directory, make_response, session, redirect, url_for, after_this_request
 from flask_cors import CORS
 from functools import wraps
 import requests
@@ -335,35 +335,50 @@ def log_request_info():
 def require_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.cookies.get('access_token') or session.get('access_token')
+        logger.info("开始验证用户认证")
+        jwt_token = request.cookies.get('jwt_token') or session.get('jwt_token')
+        logger.info(f"***JWT token: {jwt_token}")
         
-        if not token:
-            return jsonify({"error": "认证令牌缺失", "auth_url": url_for('login', _external=True)}), 401
+        if not jwt_token:
+            logger.warning("JWT 令牌缺失")
+            return jsonify({"error": "未登录"}), 401
 
         try:
-            # 解码和验证 token
-            payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-            user_info = payload.get('user_info', {})
+            logger.info("尝试解码和验证 JWT")
+            logger.info(f"使用的 JWT_SECRET: {JWT_SECRET[:5]}...") # 只记录前几个字符
+            logger.info(f"使用的 JWT_ALGORITHM: {JWT_ALGORITHM}")
             
+            # 解码和验证 JWT
+            payload = jwt.decode(jwt_token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            logger.info(f"JWT 成功解码，payload: {payload}")
+            
+            user_info = payload.get('user_info', {})
+            original_access_token = payload.get('access_token')
+            
+            logger.info(f"JWT 验证成功，用户ID: {user_info.get('id')}")
             # 更新 session 中的用户信息
             session['user_info'] = user_info
             session['user_id'] = user_info.get('id')
+            session['access_token'] = original_access_token  # 保存原始 access token
         except jwt.ExpiredSignatureError:
-            # Token 过期，尝试刷新
-            new_token = refresh_access_token()
-            if new_token:
-                # 如果刷新成功，更新 session 和 cookie
-                session['access_token'] = new_token
+            logger.warning("JWT 已过期，尝试刷新")
+            # 尝试刷新令牌
+            new_jwt = refresh_jwt_token()
+            if new_jwt:
+                logger.info("JWT 刷新成功")
+                session['jwt_token'] = new_jwt
                 response = make_response(f(*args, **kwargs))
-                response.set_cookie('access_token', new_token, 
-                                    max_age=3600*24*7, httponly=True, secure=True, samesite='Strict')
+                response.set_cookie('jwt_token', new_jwt, 
+                                    max_age=3600*24*7, httponly=False, secure=False, samesite='Lax')
                 return response
             else:
-                # 如果刷新失败，返回到登录页面
-                return jsonify({"error": "认证令牌已过期", "auth_url": url_for('login', _external=True)}), 401
-        except jwt.InvalidTokenError:
-            return jsonify({"error": "无效的认证令牌", "auth_url": url_for('login', _external=True)}), 401
+                logger.error("JWT 刷新失败")
+                return jsonify({"error": "登录已过期"}), 401
+        except jwt.InvalidTokenError as e:
+            logger.error(f"无效的 JWT: {str(e)}")
+            return jsonify({"error": "登录已过期"}), 401
 
+        logger.info("认证成功，继续处理请求")
         return f(*args, **kwargs)
 
     return decorated
@@ -408,11 +423,17 @@ def generate():
 
     prompt = data.get('prompt', '')
     if not prompt:
+        if ENABLE_IP_RESTRICTION:
+            with ip_lock:
+                active_ip_requests.pop(ip_address, None)
         return jsonify({"error": "提示词不能为空"}), 400
 
     try:
         contains_inappropriate_content = check_prompt_with_chatgpt(prompt)
         if contains_inappropriate_content:
+            if ENABLE_IP_RESTRICTION:
+                with ip_lock:
+                    active_ip_requests.pop(ip_address, None)
             return jsonify({"error": "提示词可能包含不适当的内容。请修改后重试。"}), 400
 
         translated_prompt = translate_to_english(prompt)
@@ -434,7 +455,7 @@ def generate():
             'model': model_params,
             'prompt': translated_prompt,
             'negative_prompt': data.get('negative_prompt', 'NSFW'),
-            'steps': data.get('steps', 15),  # 添加数，默认为15
+            'steps': data.get('steps', 15),  # 添加步数，默认为15
             'width': data.get('width', 512),
             'height': data.get('height', 512),
             'num_images': data.get('num_images', 1),
@@ -445,7 +466,7 @@ def generate():
         if task_queue.qsize() >= MAX_QUEUE_SIZE:
             if ENABLE_IP_RESTRICTION:
                 with ip_lock:
-                    del active_ip_requests[ip_address]
+                    active_ip_requests.pop(ip_address, None)
             return jsonify({"error": "队列已满，请稍后再试"}), 429
 
         queue_position = task_queue.qsize()
@@ -458,6 +479,9 @@ def generate():
         return jsonify({"task_id": task_id, "queuePosition": queue_position})
     except Exception as e:
         logger.error(f"处理提示词时出错: {str(e)}")
+        if ENABLE_IP_RESTRICTION:
+            with ip_lock:
+                active_ip_requests.pop(ip_address, None)
         return jsonify({"error": "处理提示词时出现错误，请稍后重试。"}), 500
 
 @app.route('/sd/status/<task_id>', methods=['GET'])
@@ -544,7 +568,7 @@ def inpaint():
             'type': 'inpaint',
             'prompt': translated_prompt,
             'negative_prompt': data.get('negative_prompt', ''),  # 添加负面提示词
-            'steps': data.get('steps', 30),  # 添加步数，默认为30
+            'steps': data.get('steps', 30),  # 添加步数，默认30
             'original_image': data.get('original_image'),
             'mask_image': data.get('mask_image'),
             'model_name': data.get('model_name', "realisticVisionV51_v51VAE.safetensors"),
@@ -769,23 +793,43 @@ def auth_complete():
 
     user_data = user_info_response.json()
     
-    # 保存 access token 和 refresh token
-    session['access_token'] = user_data['access_token']
+    # 创建 JWT
+    expiration_time = datetime.utcnow() + timedelta(days=7)
+    payload = {
+        'user_info': user_data['user_info'],
+        'access_token': user_data['access_token'],  # 存储原始 access token
+        'exp': expiration_time
+    }
+    jwt_token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+    # 保存 JWT 和其他信息
+    session['jwt_token'] = jwt_token
+    session['access_token'] = user_data['access_token']  # 保存原始 access token
     session['refresh_token'] = user_data['refresh_token']
-    session['token_expiry'] = user_data['token_expiry']
+    session['token_expiry'] = expiration_time.isoformat()
     session['user_info'] = user_data['user_info']
     session['user_id'] = user_data['user_info']['id']
     session['user_name'] = user_data['user_info']['username']
-    
 
-    response = make_response(redirect(url_for('index')))
-    response.set_cookie('access_token', user_data['access_token'], 
+    logger.info(f"用户 {user_data['user_info']} 已登录")
+    logger.info(f"***JWT token: {jwt_token}")
+    logger.info(f"***Original access token: {user_data['access_token']}")
+    logger.info(f"***refresh token: {user_data['refresh_token']}")
+    logger.info(f"***token_expiry: {session['token_expiry']}")
+
+    # 创建响应对象并设置 cookie
+    response = make_response()
+    response.set_cookie('jwt_token', jwt_token, 
                         max_age=3600*24*7, httponly=True, secure=True, samesite='Strict')
     
-    logger.info(f"认证完成，重定向到首页")
+    # 设置重定向
+    response.headers['Location'] = url_for('index')
+    response.status_code = 302  # 设置重定向状态码
+
+    logger.info(f"认证完成，设置 cookie 并重定向到首页")
     return response
 
-def refresh_access_token():
+def refresh_jwt_token():
     refresh_token = session.get('refresh_token')
     if not refresh_token:
         return None
@@ -796,11 +840,23 @@ def refresh_access_token():
                                  json={"refresh_token": refresh_token})
         if response.status_code == 200:
             new_token_data = response.json()
+            
+            # 创建新的 JWT
+            expiration_time = datetime.utcnow() + timedelta(days=7)
+            payload = {
+                'user_info': session['user_info'],
+                'access_token': new_token_data['access_token'],
+                'exp': expiration_time
+            }
+            new_jwt = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+            
             # 更新 session 中的 token 信息
+            session['jwt_token'] = new_jwt
             session['access_token'] = new_token_data['access_token']
             session['refresh_token'] = new_token_data.get('refresh_token', refresh_token)
-            session['token_expiry'] = new_token_data['token_expiry']
-            return new_token_data['access_token']
+            session['token_expiry'] = expiration_time.isoformat()
+            
+            return new_jwt
         else:
             return None
     except requests.RequestException:
@@ -811,15 +867,30 @@ def refresh_access_token():
 def logout():
     user_id = session.get('user_id')
     logger.info(f"用户 {user_id} 请求登出")
+    logout_success = True
+
     if user_id:
         logout_response = requests.post(f"{AUTH_SERVICE_URL}/oauth/logout", json={"user_id": user_id})
         if logout_response.status_code == 200:
             logger.info(f"用户 {user_id} 在认证服务中成功登出")
         else:
-            logger.warning(f"用户 {user_id} 在认证服务中登出失败")
+            logger.warning(f"用户 {user_id} 在认证服务登出失败")
+            logout_success = False
+    
+    # 清除会话
     session.clear()
     logger.info(f"用户 {user_id} 已成功从本地会话登出")
-    return redirect(url_for('index'))
+    
+    @after_this_request
+    def clear_cookie(response):
+        response.set_cookie('jwt_token', '', expires=0, httponly=True, secure=True, samesite='Strict')
+        logger.info(f"已清除用户 {user_id} 的 JWT token cookie")
+        return response
+
+    if logout_success:
+        return jsonify({"success": True, "message": "登出成功"}), 200
+    else:
+        return jsonify({"success": False, "message": "登出部分成功，但认证服务可能未完全登出"}), 207
 
 # 在文件顶部添加这个标志
 _startup_done = False
