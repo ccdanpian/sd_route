@@ -551,12 +551,18 @@ def inpaint():
 
     prompt = data.get('prompt', '')
     if not prompt:
+        if ENABLE_IP_RESTRICTION:
+            with ip_lock:
+                active_ip_requests.pop(ip_address, None)
         return jsonify({"error": "提示词不能为空"}), 400
 
     try:
         contains_inappropriate_content = check_prompt_with_chatgpt(prompt)
         if contains_inappropriate_content:
-            return jsonify({"error": "提示词可能包含不适当的内。请修改后重试。"}), 400
+            if ENABLE_IP_RESTRICTION:
+                with ip_lock:
+                    active_ip_requests.pop(ip_address, None)
+            return jsonify({"error": "提示词可能包含不适当的内容。请修改后重试。"}), 400
 
         translated_prompt = translate_to_english(prompt)
 
@@ -567,16 +573,14 @@ def inpaint():
             'task_id': task_id,
             'type': 'inpaint',
             'prompt': translated_prompt,
-            'negative_prompt': data.get('negative_prompt', ''),  # 添加负面提示词
-            'steps': data.get('steps', 30),  # 添加步数，默认30
+            'negative_prompt': data.get('negative_prompt', ''),
+            'steps': data.get('steps', 30),
             'original_image': data.get('original_image'),
             'mask_image': data.get('mask_image'),
             'model_name': data.get('model_name', "realisticVisionV51_v51VAE.safetensors"),
             'model': SD_MODEL,
             'ip_address': ip_address
         }
-
-        logger.info(f"********************steps: {task['steps']}")
 
         # 如果有 LoRA 信息，也添加到任务中
         if data.get('lora', False):
@@ -587,8 +591,8 @@ def inpaint():
         if task_queue.qsize() >= MAX_QUEUE_SIZE:
             if ENABLE_IP_RESTRICTION:
                 with ip_lock:
-                    del active_ip_requests[ip_address]
-            return jsonify({"error": "队列已满，请稍后试"}), 429
+                    active_ip_requests.pop(ip_address, None)
+            return jsonify({"error": "队列已满，请稍后再试"}), 429
 
         queue_position = task_queue.qsize()
         task_queue.put(task)
@@ -600,6 +604,9 @@ def inpaint():
         return jsonify({"task_id": task_id, "status": "pending"})
     except Exception as e:
         logger.error(f"处理提示词时出错: {str(e)}")
+        if ENABLE_IP_RESTRICTION:
+            with ip_lock:
+                active_ip_requests.pop(ip_address, None)
         return jsonify({"error": "处理提示词时出现错误，请稍后重试。"}), 500
 
 @app.route('/sd/task_status/<task_id>', methods=['GET'])
