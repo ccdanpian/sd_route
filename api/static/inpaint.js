@@ -320,13 +320,17 @@ function processTaskResult(result) {
 }
 
 function displayInpaintedImage(imageUrl, inpaintPrompt) {
-    // console.log('显示重绘图片:', imageUrl);
-    // console.log('重绘提示:', inpaintPrompt);
+    console.log('开始执行 displayInpaintedImage 函数');
+    console.log('imageUrl:', imageUrl);
+    console.log('inpaintPrompt:', inpaintPrompt);
+
     const fullImageUrl = imageUrl.startsWith('http') ? imageUrl : `${baseUrl}${imageUrl}`;
+    console.log('fullImageUrl:', fullImageUrl);
     
     // 创建重绘结果容器
     let resultContainer = document.getElementById('inpaint-container');
     if (!resultContainer) {
+        console.log('创建新的 resultContainer');
         resultContainer = document.createElement('div');
         resultContainer.id = 'inpaint-container';
         resultContainer.style.marginTop = '20px';
@@ -336,26 +340,34 @@ function displayInpaintedImage(imageUrl, inpaintPrompt) {
         resultContainer.style.display = 'block';
         
         // 在原图下方插入结果容器
-        const originalImage = document.querySelector('img'); // 假设原图是页面中的第一个img元素
+        const originalImage = document.querySelector('img');
+        console.log('原始图片元素:', originalImage);
         if (originalImage && originalImage.parentNode) {
+            console.log('将 resultContainer 插入到原始图片后');
             originalImage.parentNode.insertBefore(resultContainer, originalImage.nextSibling);
         } else {
+            console.log('将 resultContainer 添加到 body');
             document.body.appendChild(resultContainer);
         }
+    } else {
+        console.log('使用现有的 resultContainer');
     }
 
     // 清空容器
     resultContainer.innerHTML = '';
+    console.log('清空了 resultContainer');
 
     // 添加标题
     const title = document.createElement('h3');
     title.textContent = '重绘结果';
     resultContainer.appendChild(title);
+    console.log('添加了标题');
 
     // 添加重绘prompt
     const promptPara = document.createElement('p');
     promptPara.textContent = `重绘Prompt: ${inpaintPrompt}`;
     resultContainer.appendChild(promptPara);
+    console.log('添加了 prompt 段落');
 
     // 添加重绘图片
     const resultImage = document.createElement('img');
@@ -363,10 +375,21 @@ function displayInpaintedImage(imageUrl, inpaintPrompt) {
     resultImage.style.maxWidth = '100%';
     resultImage.style.display = 'block';
     resultImage.alt = '重绘结果图片';
+    resultImage.onerror = function() {
+        console.error('图片加载失败:', fullImageUrl);
+        this.alt = '图片加载失败';
+    };
+    resultImage.onload = function() {
+        console.log('图片加载成功');
+    };
     resultContainer.appendChild(resultImage);
+    console.log('添加了结果图片');
 
     // 显示容器
     resultContainer.style.display = 'block';
+    console.log('设置 resultContainer 为显示状态');
+
+    console.log('displayInpaintedImage 函数执行完毕');
 }
 
 function saveMask() {
