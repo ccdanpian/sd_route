@@ -339,14 +339,13 @@ function displayInpaintedImage(imageUrl, inpaintPrompt) {
         resultContainer.style.borderRadius = '5px';
         resultContainer.style.display = 'block';
         
-        // 在原图下方插入结果容器
-        const originalImage = document.querySelector('img');
-        console.log('原始图片元素:', originalImage);
-        if (originalImage && originalImage.parentNode) {
-            console.log('将 resultContainer 插入到原始图片后');
-            originalImage.parentNode.insertBefore(resultContainer, originalImage.nextSibling);
+        // 在原图容器下方插入结果容器
+        const originalContainer = document.getElementById('sd-result-container');
+        if (originalContainer) {
+            console.log('将 resultContainer 插入到原始图片容器后');
+            originalContainer.parentNode.insertBefore(resultContainer, originalContainer.nextSibling);
         } else {
-            console.log('将 resultContainer 添加到 body');
+            console.log('未找到原始图片容器，将 resultContainer 添加到 body');
             document.body.appendChild(resultContainer);
         }
     } else {
@@ -369,11 +368,17 @@ function displayInpaintedImage(imageUrl, inpaintPrompt) {
     resultContainer.appendChild(promptPara);
     console.log('添加了 prompt 段落');
 
+    // 创建图片容器
+    const imageContainer = document.createElement('div');
+    imageContainer.style.textAlign = 'center';
+    resultContainer.appendChild(imageContainer);
+
     // 添加重绘图片
     const resultImage = document.createElement('img');
     resultImage.src = fullImageUrl;
     resultImage.style.maxWidth = '100%';
-    resultImage.style.display = 'block';
+    resultImage.style.height = 'auto';
+    resultImage.style.display = 'inline-block';
     resultImage.alt = '重绘结果图片';
     resultImage.onerror = function() {
         console.error('图片加载失败:', fullImageUrl);
@@ -382,7 +387,7 @@ function displayInpaintedImage(imageUrl, inpaintPrompt) {
     resultImage.onload = function() {
         console.log('图片加载成功');
     };
-    resultContainer.appendChild(resultImage);
+    imageContainer.appendChild(resultImage);
     console.log('添加了结果图片');
 
     // 显示容器
