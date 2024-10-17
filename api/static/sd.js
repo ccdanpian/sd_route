@@ -134,30 +134,30 @@ function displayUserInfo(userData) {
     const authSection = document.getElementById('auth-section');
     if (authSection) {
         authSection.innerHTML = `
-            <div class="user-info-container">
-                <div class="avatar-container">
-                    <img class="avatar" src="${userData.avatar_url}" alt="头像">
-                </div>
+            <div class="user-info-container expanded">
                 <div class="user-details">
+                    <img class="avatar" src="${userData.avatar_url}" alt="头像">
                     <span class="username">${userData.name || userData.username}</span>
                     <button id="logout-btn">登出</button>
                 </div>
             </div>
         `;
         
-        const avatarContainer = authSection.querySelector('.avatar-container');
-        const userDetails = authSection.querySelector('.user-details');
+        const userInfoContainer = authSection.querySelector('.user-info-container');
         
-        avatarContainer.addEventListener('click', (e) => {
+        userInfoContainer.addEventListener('click', (e) => {
             e.stopPropagation();
-            userDetails.classList.add('show');
+            userInfoContainer.classList.toggle('expanded');
         });
         
         document.addEventListener('click', () => {
-            userDetails.classList.remove('show');
+            userInfoContainer.classList.add('expanded');
         });
         
-        document.getElementById('logout-btn').addEventListener('click', logout);
+        document.getElementById('logout-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            logout();
+        });
     } else {
         console.error('未找到 auth-section 元素');
     }
@@ -273,7 +273,7 @@ async function generateImages() {
         await checkStatus(response.task_id);
 
     } catch (error) {
-        updateDebugLog(`生成图像时发生错误: ${error.message}`);
+        updateDebugLog(`��成图像时发生错误: ${error.message}`);
         if (error.response && error.response.error) {
             updateStatus(`生成失败：${error.response.error}`);
         } else {
@@ -443,7 +443,7 @@ function displayImages(taskId, fileNames, seeds, translatedPrompt) {
         img.className = 'sd-image';
         img.dataset.taskId = taskId;
         img.addEventListener('click', () => openPreviewWindow(img.src, taskId));
-        // 设置���片的最大宽度，确保它们不会太大
+        // 设置片的最大宽度，确保它们不会太大
         img.style.maxWidth = '100%';
         img.style.height = 'auto';
 
