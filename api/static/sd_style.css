@@ -257,85 +257,57 @@ h1 {
 .user-info-container {
     position: relative;
     overflow: hidden;
-    cursor: pointer;
+    width: 32px; /* 减小默认宽度 */
+    height: 32px; /* 减小高度 */
     transition: width 0.3s ease;
-    width: 200px;
-    height: 40px;
     background-color: #f0f0f0;
-    border-radius: 20px;
+    border-radius: 16px; /* 调整圆角以匹配新的尺寸 */
 }
 
 .user-info-container.expanded {
-    width: 200px;
-}
-
-.user-info-container:not(.expanded) {
-    width: 40px;
-}
-
-.user-details {
-    display: flex;
-    align-items: center;
-    padding: 0 10px;
-    height: 100%;
-    width: 200px;
-}
-
-.avatar {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    margin-right: 10px;
-}
-
-.username {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex-grow: 1;
-}
-
-#logout-btn {
-    margin-left: 10px;
-    white-space: nowrap;
-}
-
-.user-info-container:not(.expanded) .username,
-.user-info-container:not(.expanded) #logout-btn {
-    display: none;
+    width: 140px; /* 减小展开后的宽度 */
 }
 
 .avatar-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 32px; /* 匹配容器新的尺寸 */
+    height: 32px; /* 匹配容器新的尺寸 */
     cursor: pointer;
+    z-index: 2;
 }
 
 .avatar {
-    width: 40px;
-    height: 40px;
+    width: 100%;
+    height: 100%;
     border-radius: 50%;
 }
 
 .user-details {
     position: absolute;
+    left: 32px; /* 匹配新的头像尺寸 */
     top: 0;
-    left: -200px;
-    width: 200px;
     height: 100%;
-    background-color: #f0f0f0;
-    transition: left 0.3s ease;
     display: flex;
     align-items: center;
-    padding: 0 10px;
+    padding: 0 8px; /* 减少内边距 */
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.3s ease;
 }
 
-.user-details.show {
-    left: 40px;
+.user-info-container.expanded .user-details {
+    opacity: 1;
 }
 
 .username {
-    margin-right: 10px;
+    margin-right: 8px; /* 减少右边距 */
+    font-size: 12px; /* 减小字体大小 */
 }
 
 #logout-btn {
     margin-left: auto;
+    font-size: 12px; /* 减小字体大小 */
+    padding: 2px 6px; /* 减小按钮内边距 */
 }
