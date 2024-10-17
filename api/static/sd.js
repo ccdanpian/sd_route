@@ -134,9 +134,11 @@ function displayUserInfo(userData) {
     const authSection = document.getElementById('auth-section');
     if (authSection) {
         authSection.innerHTML = `
-            <div class="user-info-container expanded">
-                <div class="user-details">
+            <div class="user-info-container">
+                <div class="avatar-container">
                     <img class="avatar" src="${userData.avatar_url}" alt="头像">
+                </div>
+                <div class="user-details">
                     <span class="username">${userData.name || userData.username}</span>
                     <button id="logout-btn">登出</button>
                 </div>
@@ -144,14 +146,15 @@ function displayUserInfo(userData) {
         `;
         
         const userInfoContainer = authSection.querySelector('.user-info-container');
+        const avatarContainer = authSection.querySelector('.avatar-container');
         
-        userInfoContainer.addEventListener('click', (e) => {
+        avatarContainer.addEventListener('click', (e) => {
             e.stopPropagation();
             userInfoContainer.classList.toggle('expanded');
         });
         
         document.addEventListener('click', () => {
-            userInfoContainer.classList.add('expanded');
+            userInfoContainer.classList.remove('expanded');
         });
         
         document.getElementById('logout-btn').addEventListener('click', (e) => {
@@ -273,7 +276,7 @@ async function generateImages() {
         await checkStatus(response.task_id);
 
     } catch (error) {
-        updateDebugLog(`��成图像时发生错误: ${error.message}`);
+        updateDebugLog(`成图像时发生错误: ${error.message}`);
         if (error.response && error.response.error) {
             updateStatus(`生成失败：${error.response.error}`);
         } else {
