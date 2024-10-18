@@ -22,10 +22,11 @@ export function checkAuthStatus() {
     
     setTimeout(() => {
         const token = getCookie('jwt_token') || localStorage.getItem('jwt_token');
+        console.log('***JWT token:', token);
         if (token) {
             console.log('找到访问令牌');
             updateDebugLog('找到访问令牌');
-            localStorage.setItem('access_token', token);
+            localStorage.setItem('jwt_token', token);
             setToken(token);
             fetchUserInfo();
         } else {
