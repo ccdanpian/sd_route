@@ -21,17 +21,23 @@ export function checkAuthStatus() {
     updateDebugLog('正在检查认证状态');
     
     setTimeout(() => {
-        const token = getCookie('jwt_token') || localStorage.getItem('jwt_token');
-        console.log('***JWT token:', token);
-        if (token) {
+        const tokenExists = cookieExists('jwt_token');
+        const token = tokenExists ? '无法读取但存在' : localStorage.getItem('jwt_token');
+        
+        console.log('JWT token 状态:', tokenExists ? '存在于 cookie 中' : (token ? '存在于 localStorage 中' : '未找到'));
+        updateDebugLog('JWT token 状态: ' + (tokenExists ? '存在于 cookie 中' : (token ? '存在于 localStorage 中' : '未找到')));
+        
+        if (tokenExists || token) {
             console.log('找到访问令牌');
             updateDebugLog('找到访问令牌');
-            localStorage.setItem('jwt_token', token);
+            if (token && token !== '无法读取但存在') {
+                localStorage.setItem('jwt_token', token);
+            }
             setToken(token);
             fetchUserInfo();
         } else {
             console.log('未找到访问令牌，显示登录按钮');
-            updateDebugLog('未找到访问令牌显示登录按钮');
+            updateDebugLog('未找到访问令牌，显示登录按钮');
             showLoginButton();
         }
     }, 500); // 500ms 延迟
