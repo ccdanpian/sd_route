@@ -508,6 +508,8 @@ function handleTouchStart(e) {
     const touch = e.touches[0];
     const canvas = document.getElementById('editCanvas');
     const rect = canvas.getBoundingClientRect();
+    
+    // 计算画布的实际缩放比例
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     
@@ -535,8 +537,11 @@ function handleTouchMove(e) {
     const canvas = document.getElementById('editCanvas');
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
+    
+    // 计算画布的实际缩放比例
+    // const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
+    const scaleX = scaleY;
     
     const x = (touch.clientX - rect.left) * scaleX;
     const y = (touch.clientY - rect.top) * scaleY;
@@ -574,8 +579,11 @@ function handleTouchEnd(e) {
     const ctx = canvas.getContext('2d');
     const maskCtx = maskImage.getContext('2d');
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
+    
+    // 计算画布的实际缩放比例
+    // const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
+    const scaleX = scaleY;
 
     if (drawMode === 'rectangle') {
         const touch = e.changedTouches[0];
