@@ -5,7 +5,7 @@ import { apiRequest, setToken, clearToken } from './api.js';
 
 export const apiUrl = '';  // 替换为实际的 API URL
 
-const DEBUG_MODE = true;  // 设置为 true 以启用更多日志
+const DEBUG_MODE = false;  // 设置为 true 以启用更多日志
 let currentTaskId = null;
 let taskQueue = [];
 let statusCheckInterval = null;
