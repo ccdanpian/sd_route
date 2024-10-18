@@ -838,7 +838,7 @@ def auth_complete():
     # 创建响应对象并设置 cookie
     response = make_response()
     response.set_cookie('jwt_token', jwt_token, 
-                        max_age=3600*24*7, httponly=True, secure=True, samesite='Strict')
+                        max_age=3600*24*7, httponly=False, secure=False, samesite='Lax')
     
     # 设置重定向到前端的首页
     redirect_url = urljoin(frontend_url, '/')  # 或者你希望重定向到的具体路径
