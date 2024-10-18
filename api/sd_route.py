@@ -834,7 +834,7 @@ def auth_complete():
     # 创建响应对象并设置 cookie
     response = make_response()
     response.set_cookie('jwt_token', jwt_token, 
-                        max_age=3600*24*7, httponly=True, secure=True, samesite='Strict')
+                        max_age=3600*24*7, httponly=False, secure=False, samesite='Lax')
     
     # 设置重定向
     response.headers['Location'] = url_for('index')
