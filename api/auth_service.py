@@ -283,4 +283,5 @@ def verify_token():
 
 if __name__ == '__main__':
     logger.info(f"启动认证服务，监听端口: 25002")
-    app.run(host='0.0.0.0', port=25002)
+    auth_port = os.environ.get('AUTH_SERVICE_PORT', '25002')
+    app.run(host='0.0.0.0', port=auth_port)
