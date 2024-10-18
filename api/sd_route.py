@@ -836,7 +836,8 @@ def auth_complete():
     # 在函数开始处添加这行
     # frontend_url = os.environ.get('PROGRAM_SERVICE_URL_LOCAL', 'http://localhost:3000')  # 假设前端运行在 3000 端口
     sd_port = os.environ.get('SD_ROUTE_PORT', '25001')  # 假设前端运行在 25001 端口
-    frontend_url = f'http://localhost:{sd_port}'
+    # 跳转前端，前端运行在index_m.html
+    frontend_url = f'index_m.html:{sd_port}'
 
     # 创建响应对象并设置 cookie
     response = make_response()
