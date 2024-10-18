@@ -1,4 +1,4 @@
 api/.env
-images/
-instance/
-tmp/
+api/images/
+api/instance/
+api/tmp/
