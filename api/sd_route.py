@@ -484,7 +484,7 @@ def generate():
         if queue_position == 0:
             threading.Thread(target=process_task, args=(task, session['user_id'], ip_address)).start()
 
-        return jsonify({"task_id": task_id, "queuePosition": queue_position})
+        return jsonify({"task_id": task_id, "queuePosition": queue_position, "max_queue_size": task_queue.qsize()})
     except Exception as e:
         logger.error(f"处理提示词时出错: {str(e)}")
         if ENABLE_IP_RESTRICTION:
