@@ -21,7 +21,7 @@ export function checkAuthStatus() {
     updateDebugLog('正在检查认证状态');
     
     setTimeout(() => {
-        const token = getCookie('access_token') || localStorage.getItem('access_token');
+        const token = getCookie('jwt_token') || localStorage.getItem('jwt_token');
         if (token) {
             console.log('找到访问令牌');
             updateDebugLog('找到访问令牌');
