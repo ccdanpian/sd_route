@@ -111,8 +111,13 @@
             // 初始化时检查一次
             sdLoraWeight.style.display = sdLora.value ? 'inline-block' : 'none';
 
-            // 移除这行，因为我们现在在 sd.js 中处理认证检查
-            // checkAuth();
+
+
+            // 添加sd-prompt的自动选中
+            const sdPrompt = document.getElementById('sd-prompt');
+            sdPrompt.addEventListener('focus', function() {
+                this.select();
+            });
         });
 
         document.addEventListener('DOMContentLoaded', function() {
