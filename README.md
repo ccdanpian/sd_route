@@ -9,6 +9,7 @@
    - 需要登录使用，通过始皇LINUXDO网站的OAuth2服务进行认证
    - 使用Stable Diffusion WebUI Forge作为FLUX绘图的API
    - 启动命令：`python sd_route.py`
+   - 访问地址：`http://localhost:sd_route_port/`
 
 2. **OAuth2服务API**
    - 处理OAuth2认证流程
