@@ -43,6 +43,11 @@ export function checkAuthStatus() {
     }, 500); // 500ms 延迟
 }
 
+function cookieExists(name) {
+    return document.cookie.split(';').some(item => item.trim().startsWith(name + '='));
+}
+
+
 function showLoginButton() {
     const authSection = document.getElementById('auth-section');
     if (authSection) {
