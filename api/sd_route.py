@@ -22,6 +22,7 @@ import secrets
 from urllib.parse import urlencode
 import jwt
 from flask_sqlalchemy import SQLAlchemy
+from urllib.parse import urljoin
 
 # 禁用SSL警告（仅用于测试环境）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -205,7 +206,7 @@ def generate_images(task):
         raise Exception(f"生成图片请求失败: {str(e)}")
 
     if 'images' not in r:
-        # logger.error("响应中没有 'images' 键")
+        # logger.error("响��中没有 'images' 键")
         raise Exception("响应中没有 'images' 键")
 
     info = r.get('info', '{}')
@@ -831,16 +832,20 @@ def auth_complete():
     logger.info(f"***refresh token: {user_data['refresh_token']}")
     logger.info(f"***token_expiry: {session['token_expiry']}")
 
+    # 在函数开始处添加这行
+    frontend_url = os.environ.get('PROGRAM_SERVICE_URL', 'http://localhost:3000')  # 假设前端运行在 3000 端口
+
     # 创建响应对象并设置 cookie
     response = make_response()
     response.set_cookie('jwt_token', jwt_token, 
-                        max_age=3600*24*7, httponly=False, secure=False, samesite='Lax')
+                        max_age=3600*24*7, httponly=True, secure=True, samesite='Strict')
     
-    # 设置重定向
-    response.headers['Location'] = url_for('index')
+    # 设置重定向到前端的首页
+    redirect_url = urljoin(frontend_url, '/')  # 或者你希望重定向到的具体路径
+    response.headers['Location'] = redirect_url
     response.status_code = 302  # 设置重定向状态码
 
-    logger.info(f"认证完成，设置 cookie 并重定向到首页")
+    logger.info(f"认证完成，设置 cookie 并重定向到前端首页: {redirect_url}")
     return response
 
 def refresh_jwt_token():
