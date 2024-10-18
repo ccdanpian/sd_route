@@ -1,3 +1,20 @@
+# FLUX画图应用 & OAuth2服务
+
+## 简介
+
+本项目包含两个主要服务：
+
+1. **FLUX画图应用**
+   - 包括前端网页和后端中转路由
+   - 需要登录使用，通过始皇LINUXDO网站的OAuth2服务进行认证
+   - 使用Stable Diffusion WebUI Forge作为FLUX绘图的API
+   - 启动命令：`python sd_route.py`
+
+2. **OAuth2服务API**
+   - 处理OAuth2认证流程
+   - 包含LINUXDO的各项参数配置
+   - 启动命令：`python auth_service.py`
+
 ## 环境变量说明
 
 ### FLUX画图应用
@@ -31,3 +48,25 @@
 | `OAUTH_TOKEN_ENDPOINT` | OAuth令牌端点 | LINUXDO的OAuth令牌获取URL |
 | `OAUTH_USER_ENDPOINT` | OAuth用户信息端点 | LINUXDO的用户信息获取URL |
 | `PROGRAM_SERVICE_URL` | X画图应用地址 | FLUX画图应用的访问地址 |
+
+## 安装和使用
+
+1. 克隆仓库
+2. 设置环境变量（参考 `.env.template` 文件）
+3. 安装依赖（如果有requirements.txt）
+4. 启动FLUX画图应用：`python sd_route.py`
+5. 启动OAuth2服务API：`python auth_service.py`
+
+## 注意事项
+
+- 确保正确配置了所有必要的环境变量
+- FLUX画图应用需要登录才能使用
+- 使用前请确保Stable Diffusion WebUI Forge已正确配置并运行
+
+## 贡献
+
+欢迎提交问题和拉取请求。
+
+## 许可证
+
+[在此添加您的许可证信息]
