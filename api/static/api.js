@@ -25,9 +25,9 @@ export async function apiRequest(url, method = 'GET', data = null) {
         'Content-Type': 'application/json',
     };
 
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
+    //if (token) {
+    //    headers['Authorization'] = `Bearer ${token}`;
+    //}
 
     const config = {
         method,
