@@ -2,3 +2,4 @@ api/.env
 api/images/
 api/instance/
 api/tmp/
+api/api
