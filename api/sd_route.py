@@ -834,7 +834,9 @@ def auth_complete():
     logger.info(f"***token_expiry: {session['token_expiry']}")
 
     # 在函数开始处添加这行
-    frontend_url = os.environ.get('PROGRAM_SERVICE_URL', 'http://localhost:3000')  # 假设前端运行在 3000 端口
+    # frontend_url = os.environ.get('PROGRAM_SERVICE_URL_LOCAL', 'http://localhost:3000')  # 假设前端运行在 3000 端口
+    sd_port = os.environ.get('SD_ROUTE_PORT', '25001')  # 假设前端运行在 25001 端口
+    frontend_url = f'http://localhost:{sd_port}'
 
     # 创建响应对象并设置 cookie
     response = make_response()
@@ -934,4 +936,5 @@ with app.app_context():
 
 if __name__ == '__main__':
     logger.info(f"启动服务器,端口 25001, AUTH_SERVICE_URL: {AUTH_SERVICE_URL}")
-    app.run(host='0.0.0.0', port=25001, threaded=True)
+    sd_port = os.environ.get('SD_ROUTE_PORT', '25001')  # 假设前端运行在 25001 端口
+    app.run(host='0.0.0.0', port=sd_port, threaded=True)
