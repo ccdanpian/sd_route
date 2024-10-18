@@ -9,17 +9,29 @@ body, html {
     max-width: 100%;
     padding: 20px;
     box-sizing: border-box;
-    padding-top: 50px; /* 为固定位置的标题腾出空间 */
+}
+
+.header {
+    position: relative;
+    height: 50px; /* 为标题和认证部分设置一个固定高度 */
+    margin-bottom: 20px;
 }
 
 h1 {
-    position: fixed;
+    position: absolute;
     top: 10px;
     left: 20px;
     margin: 0;
     font-size: 24px;
     text-align: left;
-    z-index: 1001; /* 确保标题在其他元素之上 */
+}
+
+#auth-section {
+    position: absolute;
+    top: 10px;
+    right: 20px;
+    display: flex;
+    align-items: center;
 }
 
 #sd-image-generation-container {
@@ -73,8 +85,22 @@ h1 {
 
 @media (max-width: 768px) {
     .container {
-        padding: 0;
-        padding-top: 50px; /* 在移动设备上稍微减少顶部内边距 */
+        padding: 10px;
+    }
+
+    .header {
+        height: 40px; /* 在移动设备上减小header高度 */
+    }
+
+    h1 {
+        font-size: 20px;
+        top: 5px;
+        left: 10px;
+    }
+
+    #auth-section {
+        top: 5px;
+        right: 10px;
     }
 
     #sd-image-generation-container {
@@ -257,23 +283,23 @@ h1 {
 .user-info-container {
     position: relative;
     overflow: hidden;
-    width: 32px; /* 减小默认宽度 */
-    height: 32px; /* 减小高度 */
+    width: 32px;
+    height: 32px;
     transition: width 0.3s ease;
     background-color: #f0f0f0;
-    border-radius: 16px; /* 调整圆角以匹配新的尺寸 */
+    border-radius: 16px;
 }
 
 .user-info-container.expanded {
-    width: 140px; /* 减小展开后的宽度 */
+    width: 140px;
 }
 
 .avatar-container {
     position: absolute;
     left: 0;
     top: 0;
-    width: 32px; /* 匹配容器新的尺寸 */
-    height: 32px; /* 匹配容器新的尺寸 */
+    width: 32px;
+    height: 32px;
     cursor: pointer;
     z-index: 2;
 }
@@ -286,12 +312,12 @@ h1 {
 
 .user-details {
     position: absolute;
-    left: 32px; /* 匹配新的头像尺寸 */
+    left: 32px;
     top: 0;
     height: 100%;
     display: flex;
     align-items: center;
-    padding: 0 8px; /* 减少内边距 */
+    padding: 0 8px;
     white-space: nowrap;
     opacity: 0;
     transition: opacity 0.3s ease;
@@ -302,12 +328,36 @@ h1 {
 }
 
 .username {
-    margin-right: 8px; /* 减少右边距 */
-    font-size: 12px; /* 减小字体大小 */
+    margin-right: 8px;
+    font-size: 12px;
 }
 
 #logout-btn {
     margin-left: auto;
-    font-size: 12px; /* 减小字体大小 */
-    padding: 2px 6px; /* 减小按钮内边距 */
+    font-size: 12px;
+    padding: 2px 6px;
+}
+
+#login-btn, #logout-btn {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 15px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    font-size: 12px;
+    margin-left: 10px;
+}
+
+#login-btn:hover, #logout-btn:hover {
+    background-color: #0056b3;
+}
+
+#logout-btn {
+    background-color: #f44336;
+}
+
+#logout-btn:hover {
+    background-color: #d32f2f;
 }
