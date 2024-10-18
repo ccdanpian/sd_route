@@ -6,17 +6,26 @@
     <title>Flux dev</title>
     <link rel="stylesheet" href="/static/sd_style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2286%22>😺</text></svg>">
+    <style>
+        .header {
+            background-color: white;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <h1>Flux dev</h1>
-        <!-- 添加认证部分 -->
-        <div id="auth-section"></div>
-        <!-- 修改认证部分 -->
-        <div id="auth-section">
-            <button id="login-btn" style="display: none;">登录</button>
-            <button id="logout-btn" style="display: none;">登出</button>
-            <span id="user-info" style="display: none;"></span>
+        <div class="header">
+            <h1>Flux dev</h1>
+            <!-- 添加认证部分 -->
+            <div id="auth-section"></div>
+            <!-- 修改认证部分 -->
+            <div id="auth-section">
+                <button id="login-btn" style="display: none;">登录</button>
+                <button id="logout-btn" style="display: none;">登出</button>
+                <span id="user-info" style="display: none;"></span>
+            </div>
         </div>
         <div id="sd-image-generation-container">
             <div class="input-container-sd">
