@@ -626,26 +626,49 @@ def get_task_status(task_id):
 
 # 新增路由：获取当前用户息
 @app.route('/user/info', methods=['GET'])
-@require_auth
-def get_user_info():
-    logger.info(f"收到用户信息请求: user_id={session['user_id']}")
-    user_info = session.get('user_info', {})
-    if not user_info:
-        logger.warning(f"用户 {session['user_id']} 的会话中没有用户信息")
-        return jsonify({"error": "User information not found"}), 404
-    
-    # 只返回必要的信息
-    safe_user_info = {
-        "id": user_info.get('id'),
-        "username": user_info.get('username'),
-        "avatar_url": user_info.get('avatar_url'),
-        "name": user_info.get('name'),
-        "active": user_info.get('active'),
-        "trust_level": user_info.get('trust_level'),
-        "silenced": user_info.get('silenced')
-    }
-    logger.debug(f"返回用户信息: {safe_user_info}")
-    return jsonify(safe_user_info)
+def user_info():
+    jwt_token = request.args.get('token') or request.headers.get('Authorization')
+    if not jwt_token:
+        return jsonify({"error": "No token provided"}), 401
+
+    logger.info(f"***JWT token: {jwt_token}")
+
+    try:
+        # 验证并解码 JWT
+        payload = jwt.decode(jwt_token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_info = payload.get('user_info')
+
+        if not user_info:
+            return jsonify({"error": "Invalid token"}), 401
+
+        # 只返回必要的用户信息
+        safe_user_info = {
+            "id": user_info.get('id'),
+            "username": user_info.get('username'),
+            "avatar_url": user_info.get('avatar_url'),
+            "name": user_info.get('name'),
+            "active": user_info.get('active'),
+            "trust_level": user_info.get('trust_level'),
+            "silenced": user_info.get('silenced')
+        }
+
+        # 创建响应
+        response = jsonify({
+            "user_info": safe_user_info,
+            "token_expiry": payload.get('exp')
+        })
+
+        # 设置 cookie
+        response.set_cookie('jwt_token', jwt_token, 
+                            max_age=3600*24*7, httponly=False, secure=False, samesite='Lax')
+
+        logger.info(f"用户 {user_info.get('username')} 的 JWT 信息已设置")
+        return response, 200
+
+    except jwt.ExpiredSignatureError:
+        return jsonify({"error": "Token has expired"}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({"error": "Invalid token"}), 401
 
 # 修改 inpaint_image 函数以返回结果不是直接响应
 def inpaint_image(task):
@@ -816,9 +839,9 @@ def auth_complete():
     }
     jwt_token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
-    # 保存 JWT 和其他信息
+    # 保存 JWT 和其他信息到会话
     session['jwt_token'] = jwt_token
-    session['access_token'] = user_data['access_token']  # 保存原始 access token
+    session['access_token'] = user_data['access_token']
     session['refresh_token'] = user_data['refresh_token']
     session['token_expiry'] = expiration_time.isoformat()
     session['user_info'] = user_data['user_info']
@@ -831,17 +854,13 @@ def auth_complete():
     logger.info(f"***refresh token: {user_data['refresh_token']}")
     logger.info(f"***token_expiry: {session['token_expiry']}")
 
-    # 创建响应对象并设置 cookie
-    response = make_response()
-    response.set_cookie('jwt_token', jwt_token, 
-                        max_age=3600*24*7, httponly=True, secure=True, samesite='Strict')
-    
-    # 设置重定向
-    response.headers['Location'] = url_for('index')
-    response.status_code = 302  # 设置重定向状态码
+    # 创建包含 JWT 的 /user/info 重定向 URL
+    frontend_url = os.environ.get('PROGRAM_SERVICE_URL', 'http://127.0.0.1:25001')  # 假设前端运行在 3000 端口
+    redirect_url = f"{frontend_url}/user/info?token={jwt_token}"
 
+    # 重定向到前端的 /user/info 路由
     logger.info(f"认证完成，设置 cookie 并重定向到首页")
-    return response
+    return redirect(redirect_url)
 
 def refresh_jwt_token():
     refresh_token = session.get('refresh_token')
