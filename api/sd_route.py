@@ -499,6 +499,7 @@ def get_status(task_id):
     status = task_status.get(task_id, {"status": "未知任务", "progress": 0})
     if status["status"] == "排队中":
         status["queuePosition"] = next((i for i, task in enumerate(list(task_queue.queue)) if task['task_id'] == task_id), -1)
+        status["max_queue_size"] = task_queue.qsize()
     # logger.debug(f"任务 {task_id} 状态: {status}")
     return jsonify(status)
 
