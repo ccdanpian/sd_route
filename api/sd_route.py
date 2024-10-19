@@ -46,6 +46,8 @@ OPENAI_API_BASE = os.getenv('OPENAI_API_BASE')
 ENABLE_IP_RESTRICTION = os.getenv('ENABLE_IP_RESTRICTION', 'False').lower() == 'true'
 CHATGPT_MODEL = os.getenv('CHATGPT_MODEL', 'gpt-4o-mini-2024-07-18')
 CONTENT_REVIEW_PROMPT = os.getenv('CONTENT_REVIEW_PROMPT', '你是一个内容审核助手。请判断以下提示词是否包含身体敏感部位未被遮挡、或中国国家领导人信息。只回答"是"或"否"，不要解释。')
+CONTENT_TRANSLATION_PROMPT = os.getenv('CONTENT_TRANSLATION_PROMPT', '你是一个翻译助手。请将给定的文本翻译成英语。只返回翻译结果，不要添加任何解释、引号或额外的文字。注意：如果文本已经是英语，请原样返回。')
+TRUST_LEVEL = os.getenv('TRUST_LEVEL', '1')
 MAX_QUEUE_SIZE = int(os.getenv('MAX_QUEUE_SIZE', '3'))
 SD_MODEL = os.getenv('SD_MODEL', 'v1-5-pruned-emaonly.safetensors')
 AUTH_SERVICE_URL = os.getenv('AUTH_SERVICE_URL', 'http://localhost:25002')
@@ -306,7 +308,7 @@ def translate_to_english(prompt):
         response = client.chat.completions.create(
             model=CHATGPT_MODEL,
             messages=[
-                {"role": "system", "content": "你是一个翻译助手。请将给定的文本翻译成英语。如果文本已经是英语，请原样返回。只返回翻译结果，不要添加任何解释、引号或额外的文字。"},
+                {"role": "system", "content": CONTENT_TRANSLATION_PROMPT},
                 {"role": "user", "content": prompt}
             ]
         )
