@@ -45,11 +45,8 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 OPENAI_API_BASE = os.getenv('OPENAI_API_BASE')
 ENABLE_IP_RESTRICTION = os.getenv('ENABLE_IP_RESTRICTION', 'False').lower() == 'true'
 CHATGPT_MODEL = os.getenv('CHATGPT_MODEL', 'gpt-4o-mini-2024-07-18')
-CONTENT_REVIEW_PROMPT = os.getenv('CONTENT_REVIEW_PROMPT', '你是一个内容审核助手。请判断以下提示词是否包含身体敏感部位未被遮挡、或中国国家领导人信息。只回答"是"或"否"，不要解释。')
-CONTENT_TRANSLATION_PROMPT = os.getenv('CONTENT_TRANSLATION_PROMPT', '你是一个翻译助手。请将给定的文本翻译成英语。只返回翻译结果，不要添加任何解释、引号或额外的文字。注意：如果文本已经是英语，请原样返回。')
 TRUST_LEVEL = os.getenv('TRUST_LEVEL', '1')
 MAX_QUEUE_SIZE = int(os.getenv('MAX_QUEUE_SIZE', '3'))
-SD_MODEL = os.getenv('SD_MODEL', 'v1-5-pruned-emaonly.safetensors')
 AUTH_SERVICE_URL = os.getenv('AUTH_SERVICE_URL', 'http://localhost:25002')
 JWT_SECRET = os.getenv('JWT_SECRET')
 JWT_ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
@@ -65,6 +62,18 @@ client = OpenAI(
     api_key=OPENAI_API_KEY,
     base_url=OPENAI_API_BASE if OPENAI_API_BASE else "https://api.openai.com/v1"
 )
+
+def load_config():
+    config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+    with open(config_path, 'r', encoding='utf-8') as config_file:
+        return json.load(config_file)
+
+config = load_config()
+
+# 更新这些全局变量的定义
+CONTENT_REVIEW_PROMPT = config.get('content_review_prompt', '')
+CONTENT_TRANSLATION_PROMPT = config.get('content_translation_prompt', '')
+SD_MODEL = config.get('sd_model', '')
 
 logger.info(f"SD_URL: {SD_URL}")
 logger.info(f"Output directory: {OUTPUT_DIR}")
@@ -650,25 +659,11 @@ def get_user_info():
     }
     
     # 获取并解析 Lora 模型信息
-    lora_models = parse_lora_models()
+    lora_models = config.get('sd_lora_models', [])
     safe_user_info['loraModels'] = lora_models
     
     logger.debug(f"返回用户信息和 Lora 模型: {safe_user_info}")
     return jsonify(safe_user_info)
-
-def parse_lora_models():
-    lora_models_str = os.getenv('SD_LORA_MODELS', '')
-    lora_models = []
-    for model in lora_models_str.split(','):
-        parts = model.split(':')
-        if len(parts) == 2:
-            name, weight = parts
-            lora_models.append({
-                "value": name,
-                "name": name,  # 这里可以添加一个映射来提供更友好的显示名称
-                "weight": float(weight)
-            })
-    return lora_models
 
 # 修改 inpaint_image 函数以返回结果不是直接响应
 def inpaint_image(task):
