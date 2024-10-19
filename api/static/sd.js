@@ -234,7 +234,7 @@ export function initSD() {
         console.error('在DOM中未找到生成按钮');
     }
     checkAuthStatus();
-    // 不需要在这里单独调用 updateLoraWeight，因为它会在 populateLoraSelect 中被设置为事件监听器
+    // 不要在这里单独调用 updateLoraWeight，因为它会在 populateLoraSelect 中被设置为事件监听器
 }
 
 async function generateImages() {
@@ -253,8 +253,12 @@ async function generateImages() {
     clearPreviousImages();
 
     const [width, height] = document.getElementById('sd-size').value.split('x').map(Number);
-    const loraValue = document.getElementById('sd-lora').value;
-
+    const loraSelect = document.getElementById('sd-lora');
+    const loraValue = loraSelect.value;
+    const selectedOption = loraSelect.options[loraSelect.selectedIndex];
+    const loraTriggerWords = selectedOption ? selectedOption.dataset.triggerWords : '';
+    const loraWeight = parseFloat(document.getElementById('sd-lora-weight').value);
+    
     const params = {
         prompt: document.getElementById('sd-prompt').value,
         negative_prompt: "NSFW",
@@ -265,7 +269,8 @@ async function generateImages() {
         seed: parseInt(document.getElementById('sd-seed').value),
         lora: loraValue !== "",
         lora_name: loraValue,
-        lora_weight: parseFloat(document.getElementById('sd-lora-weight').value)
+        lora_trigger_words: loraTriggerWords,
+        lora_weight: loraWeight,
     };
 
     if (!params.lora) {
@@ -473,7 +478,7 @@ function displayImages(taskId, fileNames, seeds, translatedPrompt) {
 
         const seedInfo = document.createElement('div');
         seedInfo.textContent = `种子：${seeds[index]}`;
-        seedInfo.style.marginTop = '5px'; // 为种信息添加一些上边距
+        seedInfo.style.marginTop = '5px'; // 为种信息添加一些边距
 
         imageWrapper.appendChild(img);
         imageWrapper.appendChild(seedInfo);
@@ -532,6 +537,7 @@ function initDebugMode() {
 
 // 添加新的函数来填充 Lora 选择框
 function populateLoraSelect(models) {
+    console.debug('Populating Lora select with models:', models);
     const loraSelect = document.getElementById('sd-lora');
     if (!loraSelect) {
         console.error('未找到 sd-lora 选择框');
@@ -540,6 +546,14 @@ function populateLoraSelect(models) {
 
     // 清空现有选项
     loraSelect.innerHTML = '';
+
+    // 创建包装容器
+    const wrapper = document.createElement('div');
+    wrapper.className = 'lora-select-wrapper';
+    wrapper.style.display = 'flex';
+    wrapper.style.alignItems = 'center';
+    loraSelect.parentNode.insertBefore(wrapper, loraSelect);
+    wrapper.appendChild(loraSelect);
 
     // 添加默认选项
     const defaultOption = document.createElement('option');
@@ -552,12 +566,138 @@ function populateLoraSelect(models) {
         const option = document.createElement('option');
         option.value = model.value;
         option.textContent = `${model.name}`;
-        option.dataset.weight = model.weight; // 存储权重值以便后续使用
+        option.dataset.weight = model.weight;
+        option.dataset.url = model.url;
+        option.dataset.triggerWords = model.triggerWords;
+        option.dataset.examplePic = model.examplePic;
         loraSelect.appendChild(option);
     });
 
+    // 添加预览按钮（初始隐藏）
+    const previewButton = document.createElement('button');
+    previewButton.textContent = '👁️';
+    previewButton.className = 'lora-preview-button';
+    previewButton.style.marginLeft = '5px';
+    previewButton.style.padding = '5px 10px';
+    previewButton.style.fontSize = '16px';
+    previewButton.style.cursor = 'pointer';
+    previewButton.style.display = 'none'; // 初始隐藏
+    previewButton.style.background = 'transparent'; // 透明背景
+    previewButton.style.border = 'none'; // 去掉边框
+    previewButton.style.outline = 'none'; // 去掉点击时的轮廓
+    previewButton.addEventListener('click', (event) => {
+        event.stopPropagation(); // 防止事件冒泡到 document
+        showLoraPreview(event);
+    });
+    wrapper.appendChild(previewButton);
+
     // 添加change事件监听器
-    loraSelect.addEventListener('change', updateLoraWeight);
+    loraSelect.addEventListener('change', handleLoraChange);
+
+    // 创建预览窗口（初始隐藏）
+    createLoraPreviewWindow();
+}
+
+function handleLoraChange() {
+    updateLoraWeight();
+    togglePreviewButton();
+}
+
+function togglePreviewButton() {
+    const loraSelect = document.getElementById('sd-lora');
+    const previewButton = document.querySelector('.lora-preview-button');
+    if (loraSelect && previewButton) {
+        if (loraSelect.value !== '') {
+            previewButton.style.display = 'inline-block';
+        } else {
+            previewButton.style.display = 'none';
+        }
+    }
+}
+
+function createLoraPreviewWindow() {
+    const previewWindow = document.createElement('div');
+    previewWindow.id = 'lora-preview-window';
+    previewWindow.style.display = 'none';
+    previewWindow.style.position = 'absolute';
+    previewWindow.style.backgroundColor = 'white';
+    previewWindow.style.border = '1px solid #ccc';
+    previewWindow.style.borderRadius = '5px';
+    previewWindow.style.padding = '15px';
+    previewWindow.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+    previewWindow.style.zIndex = '1000';
+    previewWindow.style.maxWidth = '366px'; // 修改最大宽度
+    previewWindow.style.width = '90%'; // 适应移动端
+    previewWindow.style.maxHeight = '500px';
+    previewWindow.style.overflow = 'hidden';
+
+    document.body.appendChild(previewWindow);
+
+    // 移除之前的点击事件监听器
+    // 现在我们将在 showLoraPreview 函数中处理所有的点击
+}
+
+function showLoraPreview(event) {
+    event.stopPropagation(); // 阻止事件冒泡
+    const loraSelect = document.getElementById('sd-lora');
+    const selectedOption = loraSelect.options[loraSelect.selectedIndex];
+    const previewWindow = document.getElementById('lora-preview-window');
+
+    // 如果预览窗口已经显示，则关闭它
+    if (previewWindow.style.display === 'block') {
+        closeLoraPreview();
+        return;
+    }
+
+    if (selectedOption.value === '') {
+        alert('请先选择一个 Lora 模型');
+        return;
+    }
+
+    previewWindow.innerHTML = `
+        <h3 style="margin-top: 0; margin-bottom: 10px;">
+            <a href="${selectedOption.dataset.url}" target="_blank" style="text-decoration: none; color: #0066cc;">
+                ${selectedOption.textContent}
+            </a>
+        </h3>
+        <p style="margin: 5px 0;"><strong>触发词:</strong> ${selectedOption.dataset.triggerWords || '无'}</p>
+        <p style="margin: 5px 0;"><strong>建议权重:</strong> ${selectedOption.dataset.weight || '未指定'}</p>
+        <div style="width: 100%; height: 300px; display: flex; justify-content: center; align-items: center; overflow: hidden; margin-top: 10px;">
+            ${selectedOption.dataset.examplePic ? `<img src="${selectedOption.dataset.examplePic}" alt="示例图片" style="max-width: 100%; max-height: 100%; object-fit: contain;">` : '<p>无示例图片</p>'}
+        </div>
+    `;
+
+    // 计算预览窗口的位置
+    const loraWrapper = document.querySelector('.lora-select-wrapper');
+    const rect = loraWrapper.getBoundingClientRect();
+    
+    // 考虑移动端的情况
+    if (window.innerWidth <= 366) {
+        previewWindow.style.left = '5%';
+        previewWindow.style.right = '5%';
+        previewWindow.style.width = '90%';
+    } else {
+        previewWindow.style.left = `${Math.max(5, rect.left)}px`;
+        previewWindow.style.width = `${Math.min(366, window.innerWidth - 20)}px`;
+    }
+    
+    previewWindow.style.top = `${rect.bottom + window.scrollY + 5}px`;
+
+    previewWindow.style.display = 'block';
+
+    // 添加点击事件监听器到 document，用于关闭预览窗口
+    setTimeout(() => {
+        document.addEventListener('click', closeLoraPreview);
+    }, 0);
+}
+
+function closeLoraPreview() {
+    const previewWindow = document.getElementById('lora-preview-window');
+    if (previewWindow) {
+        previewWindow.style.display = 'none';
+    }
+    // 移除点击事件监听器
+    document.removeEventListener('click', closeLoraPreview);
 }
 
 // 添加一个新函数来设置权重输入框的值

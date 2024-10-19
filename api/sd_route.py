@@ -355,7 +355,7 @@ def require_auth(f):
     def decorated(*args, **kwargs):
         logger.info("开始验证用户认证")
         jwt_token = request.cookies.get('jwt_token') or session.get('jwt_token')
-        logger.info(f"***JWT token: {jwt_token}")
+        # logger.info(f"***JWT token: {jwt_token}")
         
         if not jwt_token:
             logger.warning("JWT 令牌缺失")
@@ -363,12 +363,12 @@ def require_auth(f):
 
         try:
             logger.info("尝试解码和验证 JWT")
-            logger.info(f"使用的 JWT_SECRET: {JWT_SECRET[:5]}...") # 只记录前几个字符
-            logger.info(f"使用的 JWT_ALGORITHM: {JWT_ALGORITHM}")
+            # logger.info(f"使用的 JWT_SECRET: {JWT_SECRET[:5]}...") # 只记录前几个字符
+            # logger.info(f"使用的 JWT_ALGORITHM: {JWT_ALGORITHM}")
             
             # 解码和验证 JWT
             payload = jwt.decode(jwt_token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-            logger.info(f"JWT 成功解码，payload: {payload}")
+            # logger.info(f"JWT 成功解码，payload: {payload}")
             
             user_info = payload.get('user_info', {})
             original_access_token = payload.get('access_token')
@@ -460,9 +460,11 @@ def generate():
         model_params = SD_MODEL
         if data.get('lora', False):
             lora_name = data.get('lora_name', '')
+            lora_trigger_words = data.get('lora_trigger_words', '')
             lora_weight = data.get('lora_weight', 0.7)  # 默认权重为0.7
             model_params += f"<lora:{lora_name}:{lora_weight}>"
             # 将 lora 信息添加到 prompt 中
+            translated_prompt += f", {lora_trigger_words}"
             translated_prompt += f", <lora:{lora_name}:{lora_weight}>"
 
         task_id = str(uuid4())
@@ -589,6 +591,14 @@ def inpaint():
         task_id = str(uuid4())
         logger.info(f"创建新的重绘任务: task_id={task_id}")
 
+        # 如果有 LoRA 信息，也添加到任务中
+        if data.get('lora', False):
+            lora_name = data.get('lora_name', '')
+            lora_trigger_words = data.get('lora_trigger_words', '')
+            lora_weight = data.get('lora_weight', 0.7)
+            translated_prompt += f", {lora_trigger_words}"
+            translated_prompt += f", <lora:{lora_name}:{lora_weight}>"
+
         task = {
             'task_id': task_id,
             'type': 'inpaint',
@@ -607,6 +617,7 @@ def inpaint():
             lora_name = data.get('lora_name', '')
             lora_weight = data.get('lora_weight', 0.7)
             task['model'] += f"<lora:{lora_name}:{lora_weight}>"
+
 
         if task_queue.qsize() >= MAX_QUEUE_SIZE:
             if ENABLE_IP_RESTRICTION:
@@ -844,10 +855,10 @@ def auth_complete():
     session['user_name'] = user_data['user_info']['username']
 
     logger.info(f"用户 {user_data['user_info']} 已登录")
-    logger.info(f"***JWT token: {jwt_token}")
-    logger.info(f"***Original access token: {user_data['access_token']}")
-    logger.info(f"***refresh token: {user_data['refresh_token']}")
-    logger.info(f"***token_expiry: {session['token_expiry']}")
+    # logger.info(f"***JWT token: {jwt_token}")
+    # logger.info(f"***Original access token: {user_data['access_token']}")
+    # logger.info(f"***refresh token: {user_data['refresh_token']}")
+    # logger.info(f"***token_expiry: {session['token_expiry']}")
 
     # 在函数开始处添加这行
     # frontend_url = os.environ.get('PROGRAM_SERVICE_URL_LOCAL', 'http://localhost:3000')  # 假设前端运行在 3000 端口

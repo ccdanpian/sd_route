@@ -226,6 +226,12 @@ async function sendMaskedImage(inpaintPrompt) {
     const maskedImageData = maskImage.toDataURL('image/png');
 
     // console.log("***steps:", document.getElementById('sd-steps').value);
+
+    const loraSelect = document.getElementById('sd-lora');
+    const loraValue = loraSelect.value;
+    const selectedOption = loraSelect.options[loraSelect.selectedIndex];
+    const loraTriggerWords = selectedOption ? selectedOption.dataset.triggerWords : '';
+    const loraWeight = parseFloat(document.getElementById('sd-lora-weight').value);
     
     try {
         const response = await fetch(`${apiUrl}/sd/inpaint`, {
@@ -235,7 +241,11 @@ async function sendMaskedImage(inpaintPrompt) {
                 original_image: originalImageData,
                 mask_image: maskedImageData,
                 prompt: inpaintPrompt,
-                steps: parseInt(document.getElementById('sd-steps').value)
+                steps: parseInt(document.getElementById('sd-steps').value),
+                lora: loraValue !== "",
+                lora_name: loraValue,
+                lora_trigger_words: loraTriggerWords,
+                lora_weight: loraWeight,
             })
         });
 

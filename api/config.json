@@ -11,7 +11,8 @@
       "name": "Aesthetic Anime",
       "weight": 1,
       "url": "https://fluxai.studio/tw/models/flux-aesthetic-anime",
-      "triggerWords": []
+      "triggerWords": [],
+      "examplePic": "https://cdn.fluxai.studio/showcase/flux-aesthetic-anime-0.png"
     },
     {
       "value": "flux_lora_hyper_8steps",
@@ -32,21 +33,24 @@
       "name": "Child Book",
       "weight": 1,
       "url": "https://fluxai.studio/tw/models/flux-childbook-illustration",
-      "triggerWords": "in the style of TOK"
+      "triggerWords": "in the style of TOK",
+      "examplePic": "https://cdn.fluxai.studio/showcase/flux-childbook-illustration-3.png"
     },
     {
       "value": "flux_lora_one_click_creative",
       "name": "One Click Creative",
       "weight": 1,
       "url": "https://fluxai.studio/tw/models/flux-creative-cartoon-template",
-      "triggerWords": "The background is 4 real photos, and in the middle is a cartoon picture summarizing the real photos."
+      "triggerWords": "The background is 4 real photos, and in the middle is a cartoon picture summarizing the real photos",
+      "examplePic": "https://cdn.fluxai.studio/showcase/flux-creative-cartoon-template-0.jpg"
     },
     {
       "value": "FLUX-dev-lora-blended_realistic_illustration",
       "name": "Flux Blended Realistic Illustration",
       "weight": 1,
       "url": "https://fluxai.studio/tw/models/flux-blended-realistic-illustration",
-      "triggerWords": ["The artistic style blends elements of reality and illustration."]
+      "triggerWords": "The artistic style blends elements of reality and illustration",
+      "examplePic": "https://cdn.fluxai.studio/showcase/flux-blended-realistic-illustration-13.png"
     },    
     {
       "value": "nwsj_flux0924",
