@@ -119,7 +119,7 @@ function clearUserInfo() {
 }
 
 function fetchUserInfo() {
-    console.debug('获取用户信息');
+    console.debug('获取用户信息和 Lora 模型列表');
     apiRequest('/user/info', 'GET')
         .then(data => {
             if (data.error) {
@@ -127,11 +127,19 @@ function fetchUserInfo() {
                 updateDebugLog('获取用户信息失败:', data.error);
                 throw new Error(data.error);
             }
-            console.debug('成功获取用户信息:', data);
-            updateDebugLog('成功获取用户信息:', data);
+            console.debug('成功获取用户信息和 Lora 模型列表:', data);
+            updateDebugLog('成功获取用户信息和 Lora 模型列表:', data);
             isAuthenticated = true;
             updateUIForAuth(data);
             displayUserInfo(data);
+            
+            // 处理 Lora 模型列表
+            if (data.loraModels) {
+                populateLoraSelect(data.loraModels);
+            } else {
+                console.warn('未收到 Lora 模型列表');
+                updateDebugLog('未收到 Lora 模型列表');
+            }
         })
         .catch(error => {
             console.error('获取用户信息时出错:', error);
@@ -217,7 +225,7 @@ export function handleCallback() {
 
 export function initSD() {
     console.debug('初始化SD模块');
-    initDebugMode(); // 添加这行
+    initDebugMode();
     generateBtn = document.getElementById('sd-generate-btn');
     if (generateBtn) {
         generateBtn.addEventListener('click', generateImages);
@@ -226,6 +234,7 @@ export function initSD() {
         console.error('在DOM中未找到生成按钮');
     }
     checkAuthStatus();
+    // 不需要在这里单独调用 updateLoraWeight，因为它会在 populateLoraSelect 中被设置为事件监听器
 }
 
 async function generateImages() {
@@ -518,5 +527,64 @@ function initDebugMode() {
     const debugLogElement = document.getElementById('debug-log');
     if (debugLogElement) {
         debugLogElement.style.display = DEBUG_MODE ? 'block' : 'none';
+    }
+}
+
+// 添加新的函数来填充 Lora 选择框
+function populateLoraSelect(models) {
+    const loraSelect = document.getElementById('sd-lora');
+    if (!loraSelect) {
+        console.error('未找到 sd-lora 选择框');
+        return;
+    }
+
+    // 清空现有选项
+    loraSelect.innerHTML = '';
+
+    // 添加默认选项
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = '不使用Lora';
+    loraSelect.appendChild(defaultOption);
+
+    // 添加从后端获取的模型选项
+    models.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model.value;
+        option.textContent = `${model.name}`;
+        option.dataset.weight = model.weight; // 存储权重值以便后续使用
+        loraSelect.appendChild(option);
+    });
+
+    // 添加change事件监听器
+    loraSelect.addEventListener('change', updateLoraWeight);
+}
+
+// 添加一个新函数来设置权重输入框的值
+function updateLoraWeight() {
+    const loraSelect = document.getElementById('sd-lora');
+    const weightSelect = document.getElementById('sd-lora-weight');
+    if (loraSelect && weightSelect) {
+        const selectedOption = loraSelect.options[loraSelect.selectedIndex];
+        if (selectedOption.dataset.weight) {
+            const recommendedWeight = parseFloat(selectedOption.dataset.weight);
+            // 找到最接近推荐权重的选项
+            let closestOption;
+            let minDifference = Infinity;
+            for (let i = 0; i < weightSelect.options.length; i++) {
+                const optionValue = parseFloat(weightSelect.options[i].value);
+                const difference = Math.abs(optionValue - recommendedWeight);
+                if (difference < minDifference) {
+                    minDifference = difference;
+                    closestOption = weightSelect.options[i];
+                }
+            }
+            if (closestOption) {
+                closestOption.selected = true;
+            }
+            weightSelect.style.display = 'inline-block';
+        } else {
+            weightSelect.style.display = 'none';
+        }
     }
 }

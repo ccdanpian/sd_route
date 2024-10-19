@@ -208,7 +208,7 @@ def generate_images(task):
         raise Exception(f"生成图片请求失败: {str(e)}")
 
     if 'images' not in r:
-        # logger.error("响��中没有 'images' 键")
+        # logger.error("响中没有 'images' 键")
         raise Exception("响应中没有 'images' 键")
 
     info = r.get('info', '{}')
@@ -648,8 +648,27 @@ def get_user_info():
         "trust_level": user_info.get('trust_level'),
         "silenced": user_info.get('silenced')
     }
-    logger.debug(f"返回用户信息: {safe_user_info}")
+    
+    # 获取并解析 Lora 模型信息
+    lora_models = parse_lora_models()
+    safe_user_info['loraModels'] = lora_models
+    
+    logger.debug(f"返回用户信息和 Lora 模型: {safe_user_info}")
     return jsonify(safe_user_info)
+
+def parse_lora_models():
+    lora_models_str = os.getenv('SD_LORA_MODELS', '')
+    lora_models = []
+    for model in lora_models_str.split(','):
+        parts = model.split(':')
+        if len(parts) == 2:
+            name, weight = parts
+            lora_models.append({
+                "value": name,
+                "name": name,  # 这里可以添加一个映射来提供更友好的显示名称
+                "weight": float(weight)
+            })
+    return lora_models
 
 # 修改 inpaint_image 函数以返回结果不是直接响应
 def inpaint_image(task):
