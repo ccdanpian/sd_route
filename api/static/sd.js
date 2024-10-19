@@ -616,35 +616,42 @@ function togglePreviewButton() {
 }
 
 function createLoraPreviewWindow() {
+    // 创建外层容器
+    const outerContainer = document.createElement('div');
+    outerContainer.id = 'lora-preview-outer-container';
+    outerContainer.style.display = 'none';
+    outerContainer.style.position = 'absolute';
+    outerContainer.style.zIndex = '1000';
+    outerContainer.style.backgroundColor = 'white';
+    outerContainer.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+
+    // 创建预览窗口
     const previewWindow = document.createElement('div');
     previewWindow.id = 'lora-preview-window';
-    previewWindow.style.display = 'none';
-    previewWindow.style.position = 'absolute';
-    previewWindow.style.backgroundColor = 'white';
+    previewWindow.style.position = 'relative';
     previewWindow.style.border = '1px solid #ccc';
     previewWindow.style.borderRadius = '5px';
     previewWindow.style.padding = '15px';
-    previewWindow.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
-    previewWindow.style.zIndex = '1000';
-    previewWindow.style.maxWidth = '360px'; // 修改最大宽度
-    previewWindow.style.width = '90%'; // 适应移动端
+    previewWindow.style.maxWidth = '360px';
+    previewWindow.style.width = '90%';
     previewWindow.style.maxHeight = '500px';
-    previewWindow.style.overflow = 'hidden';
+    previewWindow.style.overflow = 'auto';
 
-    document.body.appendChild(previewWindow);
+    // 将预览窗口添加到外层容器
+    outerContainer.appendChild(previewWindow);
 
-    // 移除之前的点击事件监听器
-    // 现在我们将在 showLoraPreview 函数中处理所有的点击
+    // 将外层容器添加到 body
+    document.body.appendChild(outerContainer);
 }
 
 function showLoraPreview(event) {
-    event.stopPropagation(); // 阻止事件冒泡
+    event.stopPropagation();
     const loraSelect = document.getElementById('sd-lora');
     const selectedOption = loraSelect.options[loraSelect.selectedIndex];
+    const outerContainer = document.getElementById('lora-preview-outer-container');
     const previewWindow = document.getElementById('lora-preview-window');
 
-    // 如果预览窗口已经显示，则关闭它
-    if (previewWindow.style.display === 'block') {
+    if (outerContainer.style.display === 'block') {
         closeLoraPreview();
         return;
     }
@@ -663,7 +670,7 @@ function showLoraPreview(event) {
         <p style="margin: 5px 0;"><strong>触发词:</strong> ${selectedOption.dataset.triggerWords || '无'}</p>
         <p style="margin: 5px 0;"><strong>建议权重:</strong> ${selectedOption.dataset.weight || '未指定'}</p>
         <div style="width: 100%; height: 360px; display: flex; justify-content: center; align-items: center; overflow: hidden; margin-top: 10px;">
-            ${selectedOption.dataset.examplePic ? `<img src="${selectedOption.dataset.examplePic}" alt="示例图片" style="max-width: 100%; /* max-height: 100%;*/ object-fit: contain;">` : '<p>无示例图片</p>'}
+            ${selectedOption.dataset.examplePic ? `<img src="${selectedOption.dataset.examplePic}" alt="示例图片" style="max-width: 100%; object-fit: contain;">` : '<p>无示例图片</p>'}
         </div>
     `;
 
@@ -671,32 +678,30 @@ function showLoraPreview(event) {
     const loraWrapper = document.querySelector('.lora-select-wrapper');
     const rect = loraWrapper.getBoundingClientRect();
     
-    // 考虑移动端的情况
     if (window.innerWidth <= 500) {
-        previewWindow.style.left = '5%';
-        previewWindow.style.right = '5%';
+        outerContainer.style.left = '0';
+        outerContainer.style.right = '0';
         previewWindow.style.width = '90%';
+        previewWindow.style.margin = '0 auto';
     } else {
-        previewWindow.style.left = `${Math.max(5, rect.left)}px`;
-        previewWindow.style.width = `${Math.min(500, window.innerWidth - 20)}px`;
+        outerContainer.style.left = `${Math.max(5, rect.left)}px`;
+        previewWindow.style.width = `${Math.min(360, window.innerWidth - 20)}px`;
     }
     
-    previewWindow.style.top = `${rect.bottom + window.scrollY + 5}px`;
+    outerContainer.style.top = `${rect.bottom + window.scrollY + 5}px`;
 
-    previewWindow.style.display = 'block';
+    outerContainer.style.display = 'block';
 
-    // 添加点击事件监听器到 document，用于关闭预览窗口
     setTimeout(() => {
         document.addEventListener('click', closeLoraPreview);
     }, 0);
 }
 
 function closeLoraPreview() {
-    const previewWindow = document.getElementById('lora-preview-window');
-    if (previewWindow) {
-        previewWindow.style.display = 'none';
+    const outerContainer = document.getElementById('lora-preview-outer-container');
+    if (outerContainer) {
+        outerContainer.style.display = 'none';
     }
-    // 移除点击事件监听器
     document.removeEventListener('click', closeLoraPreview);
 }
 
