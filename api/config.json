@@ -10,7 +10,7 @@
       "value": "flux_lora_aesthetiAnime",
       "name": "Aesthetic Anime",
       "weight": 1.0,
-      "url": "flux.com"
+      "url": "https://fluxai.studio/tw/models/flux-aesthetic-anime"
     },
     {
       "value": "flux_lora_hyper_8steps",
@@ -28,7 +28,7 @@
       "value": "flux_lora_childbook",
       "name": "Child Book",
       "weight": 1.0,
-      "url": "flux.com"
+      "url": "https://fluxai.studio/tw/models/flux-childbook-illustration"
     },
     {
       "value": "flux_lora_one_click_creative",
