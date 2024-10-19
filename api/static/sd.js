@@ -626,7 +626,7 @@ function createLoraPreviewWindow() {
     previewWindow.style.padding = '15px';
     previewWindow.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
     previewWindow.style.zIndex = '1000';
-    previewWindow.style.maxWidth = '366px'; // 修改最大宽度
+    previewWindow.style.maxWidth = '360px'; // 修改最大宽度
     previewWindow.style.width = '90%'; // 适应移动端
     previewWindow.style.maxHeight = '500px';
     previewWindow.style.overflow = 'hidden';
@@ -663,7 +663,7 @@ function showLoraPreview(event) {
         <p style="margin: 5px 0;"><strong>触发词:</strong> ${selectedOption.dataset.triggerWords || '无'}</p>
         <p style="margin: 5px 0;"><strong>建议权重:</strong> ${selectedOption.dataset.weight || '未指定'}</p>
         <div style="width: 100%; height: 300px; display: flex; justify-content: center; align-items: center; overflow: hidden; margin-top: 10px;">
-            ${selectedOption.dataset.examplePic ? `<img src="${selectedOption.dataset.examplePic}" alt="示例图片" style="max-width: 100%; max-height: 100%; object-fit: contain;">` : '<p>无示例图片</p>'}
+            ${selectedOption.dataset.examplePic ? `<img src="${selectedOption.dataset.examplePic}" alt="示例图片" style="max-width: 100%; /* max-height: 100%;*/ object-fit: contain;">` : '<p>无示例图片</p>'}
         </div>
     `;
 
@@ -672,13 +672,13 @@ function showLoraPreview(event) {
     const rect = loraWrapper.getBoundingClientRect();
     
     // 考虑移动端的情况
-    if (window.innerWidth <= 366) {
+    if (window.innerWidth <= 500) {
         previewWindow.style.left = '5%';
         previewWindow.style.right = '5%';
         previewWindow.style.width = '90%';
     } else {
         previewWindow.style.left = `${Math.max(5, rect.left)}px`;
-        previewWindow.style.width = `${Math.min(366, window.innerWidth - 20)}px`;
+        previewWindow.style.width = `${Math.min(500, window.innerWidth - 20)}px`;
     }
     
     previewWindow.style.top = `${rect.bottom + window.scrollY + 5}px`;
