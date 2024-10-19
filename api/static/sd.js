@@ -662,7 +662,7 @@ function showLoraPreview(event) {
         </h3>
         <p style="margin: 5px 0;"><strong>触发词:</strong> ${selectedOption.dataset.triggerWords || '无'}</p>
         <p style="margin: 5px 0;"><strong>建议权重:</strong> ${selectedOption.dataset.weight || '未指定'}</p>
-        <div style="width: 100%; height: 300px; display: flex; justify-content: center; align-items: center; overflow: hidden; margin-top: 10px;">
+        <div style="width: 100%; height: 360px; display: flex; justify-content: center; align-items: center; overflow: hidden; margin-top: 10px;">
             ${selectedOption.dataset.examplePic ? `<img src="${selectedOption.dataset.examplePic}" alt="示例图片" style="max-width: 100%; /* max-height: 100%;*/ object-fit: contain;">` : '<p>无示例图片</p>'}
         </div>
     `;
