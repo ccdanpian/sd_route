@@ -411,7 +411,7 @@ def generate():
         logger.warning(f"用户的会话中没有用户信息")
         return jsonify({"error": "无法获取用户信息"}), 403
 
-    if not user_info.get('active', False) or user_info.get('silenced', False) or user_info.get('trust_level', 0) < 2:
+    if not user_info.get('active', False) or user_info.get('silenced', False) or user_info.get('trust_level', 0) < 1:
         logger.warning(f"用户 {user_info.get('id')} 没有权限生成图片")
         return jsonify({"error": "您没有权限使用此功能"}), 403
     
