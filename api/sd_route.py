@@ -673,7 +673,7 @@ def get_user_info():
     lora_models = config.get('sd_lora_models', [])
     safe_user_info['loraModels'] = lora_models
     
-    logger.debug(f"返回用户信息和 Lora 模型: {safe_user_info}")
+    # logger.debug(f"返回用户信息和 Lora 模型: {safe_user_info}")
     return jsonify(safe_user_info)
 
 # 修改 inpaint_image 函数以返回结果不是直接响应

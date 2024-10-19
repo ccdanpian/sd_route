@@ -12,7 +12,7 @@
       "weight": 1,
       "url": "https://fluxai.studio/tw/models/flux-aesthetic-anime",
       "triggerWords": [],
-      "examplePrompt": "",
+      "examplePrompt": "a girl on a sailboat",
       "examplePic": "https://cdn.fluxai.studio/showcase/flux-aesthetic-anime-1.png"
     },
     {
@@ -39,8 +39,8 @@
       "weight": 1,
       "url": "https://fluxai.studio/tw/models/flux-childbook-illustration",
       "triggerWords": "in the style of TOK",
-      "examplePrompt": "a girl on a sailboat",
-      "examplePic": "A village in the snowy Alps, it's night and the lights of the houses are turned on which gives a cozy atmosphere, full moon is smiling and the Matterhorn in the background in the style of TOK"
+      "examplePrompt": "A village in the snowy Alps, it's night and the lights of the houses are turned on which gives a cozy atmosphere, full moon is smiling and the Matterhorn in the background in the style of TOK",
+      "examplePic": "https://cdn.fluxai.studio/showcase/flux-childbook-illustration-3.png"
     },
     {
       "value": "flux_lora_one_click_creative",

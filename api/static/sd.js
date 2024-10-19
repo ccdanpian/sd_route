@@ -658,21 +658,30 @@ function showLoraPreview(event) {
     }
 
     if (selectedOption.value === '') {
-        alert('请先选择一个 Lora 模型');
+        alert('Please select a Lora model first');
         return;
     }
 
     previewWindow.innerHTML = `
-        <h3 style="margin-top: 0; margin-bottom: 10px;">
+        <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 18px;">
             <a href="${selectedOption.dataset.url}" target="_blank" style="text-decoration: none; color: #0066cc;">
                 ${selectedOption.textContent}
             </a>
         </h3>
-        <p style="margin: 5px 0;"><strong>触发词:</strong> ${selectedOption.dataset.triggerWords || '无'}</p>
-        <p style="margin: 5px 0;"><strong>建议权重:</strong> ${selectedOption.dataset.weight || '未指定'}</p>
-        <p style="margin: 5px 0;"><strong>Prompt示例:</strong> ${selectedOption.dataset.examplePrompt || '未提供'}</p>
+        <p style="margin: 5px 0; font-size: 14px;">
+            <strong style="font-size: 14px;">Trigger Words:</strong> 
+            <span style="font-size: 14px;">${selectedOption.dataset.triggerWords || 'None'}</span>
+        </p>
+        <p style="margin: 5px 0; font-size: 14px;">
+            <strong style="font-size: 14px;">Recommended Weight:</strong> 
+            <span style="font-size: 14px;">${selectedOption.dataset.weight || 'Not specified'}</span>
+        </p>
+        <p style="margin: 5px 0; font-size: 14px;">
+            <strong style="font-size: 14px;">Prompt Example:</strong> 
+            <span style="font-size: 14px;">${selectedOption.dataset.examplePrompt || 'Not provided'}</span>
+        </p>
         <div style="width: 100%; height: 360px; display: flex; justify-content: center; align-items: center; overflow: hidden; margin-top: 10px;">
-            ${selectedOption.dataset.examplePic ? `<img src="${selectedOption.dataset.examplePic}" alt="示例图片" style="max-width: 100%; object-fit: contain;">` : '<p>无示例图片</p>'}
+            ${selectedOption.dataset.examplePic ? `<img src="${selectedOption.dataset.examplePic}" alt="Example Image" style="max-width: 100%; object-fit: contain;">` : '<p style="font-size: 14px;">No example image</p>'}
         </div>
     `;
 
