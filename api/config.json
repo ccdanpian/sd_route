@@ -9,38 +9,51 @@
     {
       "value": "flux_lora_aesthetiAnime",
       "name": "Aesthetic Anime",
-      "weight": 1.0,
-      "url": "https://fluxai.studio/tw/models/flux-aesthetic-anime"
+      "weight": 1,
+      "url": "https://fluxai.studio/tw/models/flux-aesthetic-anime",
+      "triggerWords": []
     },
     {
       "value": "flux_lora_hyper_8steps",
       "name": "Hyper 8 Steps",
       "weight": 0.1,
-      "url": "flux.com"
+      "url": "flux.com",
+      "triggerWords": []
     },
     {
       "value": "flux_lora_realism",
       "name": "Realism",
-      "weight": 0.6,
-      "url": "flux.com"
+      "weight": 1,
+      "url": "flux.com",
+      "triggerWords": []
     },
     {
       "value": "flux_lora_childbook",
       "name": "Child Book",
-      "weight": 1.0,
-      "url": "https://fluxai.studio/tw/models/flux-childbook-illustration"
+      "weight": 1,
+      "url": "https://fluxai.studio/tw/models/flux-childbook-illustration",
+      "triggerWords": "in the style of TOK"
     },
     {
       "value": "flux_lora_one_click_creative",
       "name": "One Click Creative",
-      "weight": 0.7,
-      "url": "flux.com"
+      "weight": 1,
+      "url": "https://fluxai.studio/tw/models/flux-creative-cartoon-template",
+      "triggerWords": "The background is 4 real photos, and in the middle is a cartoon picture summarizing the real photos."
     },
+    {
+      "value": "FLUX-dev-lora-blended_realistic_illustration",
+      "name": "Flux Blended Realistic Illustration",
+      "weight": 1,
+      "url": "https://fluxai.studio/tw/models/flux-blended-realistic-illustration",
+      "triggerWords": ["The artistic style blends elements of reality and illustration."]
+    },    
     {
       "value": "nwsj_flux0924",
       "name": "NWSJ Flux",
       "weight": 0.3,
-      "url": "flux.com"
+      "url": "flux.com",
+      "triggerWords": []
     }
   ]
 }
