@@ -12,21 +12,26 @@
       "weight": 1,
       "url": "https://fluxai.studio/tw/models/flux-aesthetic-anime",
       "triggerWords": [],
-      "examplePic": "https://cdn.fluxai.studio/showcase/flux-aesthetic-anime-0.png"
+      "examplePrompt": "",
+      "examplePic": "https://cdn.fluxai.studio/showcase/flux-aesthetic-anime-1.png"
     },
     {
       "value": "flux_lora_hyper_8steps",
       "name": "Hyper 8 Steps",
       "weight": 0.1,
       "url": "flux.com",
-      "triggerWords": []
+      "triggerWords": [],
+      "examplePrompt": [],
+      "examplePic": []
     },
     {
       "value": "flux_lora_realism",
       "name": "Realism",
       "weight": 1,
-      "url": "flux.com",
-      "triggerWords": []
+      "url": [],
+      "triggerWords": [],
+      "examplePrompt": [],
+      "examplePic": []
     },
     {
       "value": "flux_lora_childbook",
@@ -34,7 +39,8 @@
       "weight": 1,
       "url": "https://fluxai.studio/tw/models/flux-childbook-illustration",
       "triggerWords": "in the style of TOK",
-      "examplePic": "https://cdn.fluxai.studio/showcase/flux-childbook-illustration-3.png"
+      "examplePrompt": "a girl on a sailboat",
+      "examplePic": "A village in the snowy Alps, it's night and the lights of the houses are turned on which gives a cozy atmosphere, full moon is smiling and the Matterhorn in the background in the style of TOK"
     },
     {
       "value": "flux_lora_one_click_creative",
@@ -42,6 +48,7 @@
       "weight": 1,
       "url": "https://fluxai.studio/tw/models/flux-creative-cartoon-template",
       "triggerWords": "The background is 4 real photos, and in the middle is a cartoon picture summarizing the real photos",
+      "examplePrompt": "A panda.The background is 4 real photos, and in the middle is a cartoon picture summarizing the real photos.",
       "examplePic": "https://cdn.fluxai.studio/showcase/flux-creative-cartoon-template-0.jpg"
     },
     {
@@ -50,14 +57,17 @@
       "weight": 1,
       "url": "https://fluxai.studio/tw/models/flux-blended-realistic-illustration",
       "triggerWords": "The artistic style blends elements of reality and illustration",
+      "examplePrompt": "A European and American man wearing a hat sat at the dining table,using his smartphone to capture another cartoon style blonde European and American woman across from him. On the marble table,there are various colorful foods and desserts,including fruits,pastries,and drinks. The background is a large window,where trees can be seen from the outside,and the natural light is bright,creating a relaxed dining environment. The entire scene creatively blends elements of reality and illustration. The artistic style blends elements of reality and illustration.,",
       "examplePic": "https://cdn.fluxai.studio/showcase/flux-blended-realistic-illustration-13.png"
     },    
     {
       "value": "nwsj_flux0924",
       "name": "NWSJ Flux",
       "weight": 0.3,
-      "url": "flux.com",
-      "triggerWords": []
+      "url": [],
+      "triggerWords": [],
+      "examplePrompt": [],
+      "examplePic": []
     }
   ]
 }

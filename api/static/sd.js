@@ -570,6 +570,7 @@ function populateLoraSelect(models) {
         option.dataset.url = model.url;
         option.dataset.triggerWords = model.triggerWords;
         option.dataset.examplePic = model.examplePic;
+        option.dataset.examplePrompt = model.examplePrompt; // 添加 Prompt 示例数据
         loraSelect.appendChild(option);
     });
 
@@ -669,6 +670,7 @@ function showLoraPreview(event) {
         </h3>
         <p style="margin: 5px 0;"><strong>触发词:</strong> ${selectedOption.dataset.triggerWords || '无'}</p>
         <p style="margin: 5px 0;"><strong>建议权重:</strong> ${selectedOption.dataset.weight || '未指定'}</p>
+        <p style="margin: 5px 0;"><strong>Prompt示例:</strong> ${selectedOption.dataset.examplePrompt || '未提供'}</p>
         <div style="width: 100%; height: 360px; display: flex; justify-content: center; align-items: center; overflow: hidden; margin-top: 10px;">
             ${selectedOption.dataset.examplePic ? `<img src="${selectedOption.dataset.examplePic}" alt="示例图片" style="max-width: 100%; object-fit: contain;">` : '<p>无示例图片</p>'}
         </div>
