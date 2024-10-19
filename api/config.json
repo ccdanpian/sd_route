@@ -9,7 +9,7 @@
     {
       "value": "flux_lora_aesthetiAnime",
       "name": "Aesthetic Anime",
-      "weight": 0.7,
+      "weight": 1.0,
       "url": "flux.com"
     },
     {
@@ -27,7 +27,7 @@
     {
       "value": "flux_lora_childbook",
       "name": "Child Book",
-      "weight": 0.5,
+      "weight": 1.0,
       "url": "flux.com"
     },
     {
@@ -39,7 +39,7 @@
     {
       "value": "nwsj_flux0924",
       "name": "NWSJ Flux",
-      "weight": 0.6,
+      "weight": 0.3,
       "url": "flux.com"
     }
   ]
