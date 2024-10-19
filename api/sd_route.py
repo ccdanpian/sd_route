@@ -23,6 +23,7 @@ from urllib.parse import urlencode
 import jwt
 from flask_sqlalchemy import SQLAlchemy
 from urllib.parse import urljoin
+from image_cleaner import start_image_cleaner
 
 # 禁用SSL警告（仅用于测试环境）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -50,6 +51,10 @@ MAX_QUEUE_SIZE = int(os.getenv('MAX_QUEUE_SIZE', '3'))
 AUTH_SERVICE_URL = os.getenv('AUTH_SERVICE_URL', 'http://localhost:25002')
 JWT_SECRET = os.getenv('JWT_SECRET')
 JWT_ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
+
+# 从环境变量获取清理间隔和保留时间
+CLEANER_INTERVAL_MINUTES = int(os.getenv('CLEANER_INTERVAL_MINUTES', '60'))
+CLEANER_RETENTION_HOURS = int(os.getenv('CLEANER_RETENTION_HOURS', '48'))
 
 # 禁用SSL警告（仅用于测试环境）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -961,6 +966,9 @@ def before_request():
 # 在文件末尾，但在 if __name__ == '__main__': 之前
 with app.app_context():
     log_startup_info()
+
+# 启动图片清理器
+start_image_cleaner(OUTPUT_DIR, CLEANER_INTERVAL_MINUTES, CLEANER_RETENTION_HOURS)
 
 if __name__ == '__main__':
     logger.info(f"启动服务器,端口 25001, AUTH_SERVICE_URL: {AUTH_SERVICE_URL}")
