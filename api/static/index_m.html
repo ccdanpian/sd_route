@@ -6,8 +6,23 @@
     <title>Flux dev</title>
     <link rel="stylesheet" href="/static/sd_style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2285%22>😺</text></svg>">
+    <style>
+        #history-btn {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            font-size: 24px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            z-index: 1000;
+        }
+    </style>
 </head>
 <body>
+    <!-- 添加历史按钮 -->
+    <button id="history-btn">📜</button>
+
     <div class="container">
         <div class="header">
             <h1>Flux dev</h1>
@@ -146,6 +161,12 @@
     </script>
 
     <script type="module" src="static/sd.js"></script>
+    <script type="module" src="static/history.js"></script>
 
+    <!-- 添加历史功能脚本 -->
+    <script type="module">
+        import { openHistoryTab } from './static/history.js';
+        document.getElementById('history-btn').addEventListener('click', openHistoryTab);
+    </script>
 </body>
 </html>

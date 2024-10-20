@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图像生成历史</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 15px;
+            background-color: #f5f5f5;
+            box-sizing: border-box;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            font-size: 22px;
+            margin: 15px 0;
+            padding: 0;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+        .search-form {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+            max-width: 100%;
+        }
+        .search-form input {
+            width: 100%;
+            padding: 8px;
+            font-size: 14px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .search-form button {
+            width: 100%;
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .search-form button:hover {
+            background-color: #2980b9;
+        }
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            h1 {
+                font-size: 18px;
+                margin: 10px 0;
+            }
+            .search-form {
+                padding: 10px;
+            }
+            .search-form input,
+            .search-form button {
+                font-size: 14px;
+                padding: 8px 10px;
+            }
+        }
+        .results {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .image-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .image-card img {
+            width: 100%;
+            height: 300px;
+            object-fit: cover;
+        }
+        .image-info {
+            padding: 10px;
+        }
+        .image-info p {
+            margin: 5px 0;
+        }
+        .prompt {
+            font-style: italic;
+            color: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+    <h1>图像生成历史</h1>
+    <div class="search-form">
+        <input type="text" id="keyword" placeholder="输入关键词">
+        <input type="date" id="start-date">
+        <input type="date" id="end-date">
+        <button id="searchButton">查询</button>
+    </div>
+    <div id="results" class="results"></div>
+    <script type="module">
+        import { searchImages } from './history.js';
+        document.getElementById('searchButton').addEventListener('click', searchImages);
+    </script>
+</body>
+</html>

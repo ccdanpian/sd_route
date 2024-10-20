@@ -1,11 +1,13 @@
-from flask import Flask, request, jsonify, send_from_directory, make_response, session, redirect, url_for, after_this_request
+from flask import Flask, request, jsonify, send_from_directory, make_response, session, redirect, url_for, after_this_request, current_app
 from flask_cors import CORS
+from flask import current_app as app
+from flask_sqlalchemy import SQLAlchemy
 from functools import wraps
 import requests
 import io
 from io import BytesIO
 import base64
-from PIL import Image
+from PIL import Image as PILImage
 import os
 import random
 from datetime import datetime, timedelta
@@ -21,9 +23,10 @@ from dotenv import load_dotenv
 import secrets
 from urllib.parse import urlencode
 import jwt
-from flask_sqlalchemy import SQLAlchemy
-from urllib.parse import urljoin
 from image_cleaner import start_image_cleaner
+from sqlalchemy import desc
+import sqlite3
+import traceback
 
 # 禁用SSL警告（仅用于测试环境）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -35,10 +38,29 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
+# 数据库配置
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///images.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+
+# 定义数据库模型
+class Image(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(50), nullable=False)
+    prompt = db.Column(db.Text, nullable=False)
+    base64 = db.Column(db.Text, nullable=False)
+    model = db.Column(db.String(100), nullable=False)
+    lora = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+# 在应用上下文中创建数据库表
+with app.app_context():
+    db.create_all()
+
 # 设置 secret key
 app.secret_key = os.environ.get('FLASK_SECRET_KEY') or secrets.token_hex(16)
 
-# 从环境变量获取配置
+# 环境变量获取配置
 load_dotenv()
 SD_URL = os.getenv('SD_URL', 'https://127.0.0.1:7860')
 OUTPUT_DIR = os.getenv('SD_OUTPUT_DIR', 'output')
@@ -193,7 +215,7 @@ def set_model_and_lora(task):
 
 def generate_images(task):
     # 首先设置模型和LoRA
-    # webui已经加载过，不需要每次生成图片都设置模型和LoRA
+    # webui已经加载，不需要每次生成图片都设置模型和LoRA
     # set_model_and_lora(task)
 
     # 然后生成图像
@@ -219,80 +241,88 @@ def generate_images(task):
         response.raise_for_status()
         r = response.json()
     except requests.exceptions.RequestException as e:
-        # logger.error(f"生成图片请求失败: {str(e)}")
+        logger.error(f"生成图片请求失: {str(e)}")
         raise Exception(f"生成图片请求失败: {str(e)}")
 
-    if 'images' not in r:
-        # logger.error("响中没有 'images' 键")
-        raise Exception("响应中没有 'images' 键")
+    images = r['images']
+    num_images_received = len(images)
+    logger.info(f"生成的图片数量: {num_images_received}")
+
+    logger.debug(f"任务详情: {task}")
+    logger.debug(f"API 响应: {r}")
 
     info = r.get('info', '{}')
     if isinstance(info, str):
         try:
             info = json.loads(info)
+            logger.debug(f"解析后的 info: {info}")
         except json.JSONDecodeError:
-            # logger.error("无法解析 'info' 字符串为 JSON")
+            logger.error("无法解析 'info' 字符串为 JSON")
             info = {}
 
-    seeds = info.get('all_seeds', [task['seed']] * task['num_images'])
-    images = r['images']
-    # logger.info(f"生成的图片数量: {len(images)}")
+    seeds = info.get('all_seeds', [task['seed']] * num_images_received)
+    logger.debug(f"种子列表: {seeds}")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     task_output_dir = os.path.join(OUTPUT_DIR, task['task_id'])
     os.makedirs(task_output_dir, exist_ok=True)
 
     saved_files = []
+    images_to_save = []  # 用于存储需要保存到数据库的图片信息
+
     ai_response_content = '### 生成的图片\n\n'
     ai_response_content += f'**Prompt:** {task["prompt"]}\n\n'
     ai_response_content += '<div class="container_sd">\n'
 
     for i, img_data in enumerate(images):
-        progress = int((i + 1) / task['num_images'] * 100)
-        update_task_status(task['task_id'], f"处理图片 {i+1}/{task['num_images']}", progress)
-
-        if not isinstance(img_data, str) or not img_data.strip():
-            # logger.warning(f"图片 {i+1} 的数据无效")
-            continue
-
+        logger.debug(f"处理图片 {i+1}/{num_images_received}")
+        logger.debug(f"图片数据前100个字符: {img_data[:100]}")
+        
         try:
-            image_data = base64.b64decode(img_data)
-            image = Image.open(io.BytesIO(image_data))
+            # 直接解码 base64 数据
+            img = PILImage.open(io.BytesIO(base64.b64decode(img_data)))
             file_name = f"{timestamp}_{seeds[i]}.png"
+            logger.debug(f"正在保存图片: {file_name}")
             file_path = os.path.join(task_output_dir, file_name)
-            image.save(file_path)
+            img.save(file_path)
             saved_files.append(file_name)
 
             relative_path = f"/images/sd/{task['task_id']}/{file_name}"
             ai_response_content += f'<img src="{relative_path}" alt="Generated image {i+1}">\n'
 
-            # logger.info(f"图片 {i+1} 已保存")
+            # 将图片信息添加到待保存列表
+            images_to_save.append({
+                'user_id': task['user_id'],
+                'prompt': task['prompt'],
+                'base64': img_data,
+                'model': SD_MODEL,
+                'lora': task.get('lora', ''),
+                'created_at': datetime.utcnow()
+            })
+
         except Exception as e:
             logger.error(f"处理图片 {i+1} 时出错: {str(e)}")
+            logger.error(f"错误详情: {traceback.format_exc()}")
+            continue  # 跳过这张图片，继续处理下一张
 
     ai_response_content += '</div>\n\n'
-    ai_response_content += f'**Seeds:** {", ".join(map(str, seeds))}\n\n'
+    ai_response_content += f'**Seeds:** {", ".join(map(str, seeds[:num_images_received]))}\n\n'
 
-    # 保存到数据库
-    new_topic_start_time = datetime.now().isoformat()
-    # try:
-    #     insert_topic(f'sd_{prompt}', new_topic_start_time, phone_number)
-    #     logger.info("成功将prompt保存为的topic")
-
-    #     dialog_assistant = {
-    #         "model": model,
-    #         "role": "assistant",
-    #         "content": ai_response_content,
-    #         "this_message_time": new_topic_start_time,
-    #     }
-
-    #     insert_single_dialogue(dialog_assistant, new_topic_start_time, phone_number)
-    #     logger.info("成功将图片信息、prompt和seed保存到数据库")
-    # except Exception as e:
-    #     logger.error(f"保存到数据库时出错: {str(e)}")
+    # 在应用上下文中保存图片信息到数据库
+    with app.app_context():
+        try:
+            for img_info in images_to_save:
+                new_image = Image(**img_info)
+                db.session.add(new_image)
+            db.session.commit()
+            logger.info(f"成功保存 {len(images_to_save)} 张图片信息到数据库")
+        except Exception as e:
+            logger.error(f"保存图片信息到数据库时出错: {str(e)}")
+            logger.error(f"错误详情: {traceback.format_exc()}")
+            db.session.rollback()
 
     update_task_status(task['task_id'], "所有图片生成完成", 100)
-    return seeds, saved_files, new_topic_start_time
+    return seeds, saved_files, timestamp
 
 def check_prompt_with_chatgpt(prompt):
     try:
@@ -315,7 +345,7 @@ def check_prompt_with_chatgpt(prompt):
         return result == '是'
     except Exception as e:
         # logger.error(f"ChatGPT API调用错误: {str(e)}")
-        return False  # 如果API调用失败，我们假设内容是安全的
+        return False  # 如果API��用失败，我们假设内容是安全的
 
 def translate_to_english(prompt):
     try:
@@ -469,7 +499,7 @@ def generate():
             lora_trigger_words = data.get('lora_trigger_words', '')
             lora_weight = data.get('lora_weight', 0.7)  # 默认权重为0.7
             model_params += f"<lora:{lora_name}:{lora_weight}>"
-            # 将 lora 信息添加到 prompt 中
+            # 将 lora 信息添加到 prompt 
             translated_prompt += f", {lora_trigger_words}"
             translated_prompt += f", <lora:{lora_name}:{lora_weight}>"
 
@@ -546,7 +576,7 @@ def save_debug_image(image_data, filename):
     logger.debug(f"保存调试图片: {file_path}")
 
 def get_image_dimensions(image_data):
-    with Image.open(BytesIO(image_data)) as img:
+    with PILImage.open(BytesIO(image_data)) as img:
         return img.size
 
 # 添加新的 inpaint 路由
@@ -650,7 +680,7 @@ def inpaint():
 @require_auth
 def get_task_status(task_id):
     logger.info(f"Received task status request for task {task_id}")
-    status = task_status.get(task_id, {"status": "未知任务", "progress": 0})
+    status = task_status.get(task_id, {"status": "知任务", "progress": 0})
     logger.info(f"获取任务状态: task_id={task_id}, status={status}")
     return jsonify(status)
 
@@ -716,7 +746,7 @@ def inpaint_image(task):
         mask_image_b64 = encode_image_to_base64(mask_image_path)
 
         # 获取图片尺寸
-        with Image.open(original_image_path) as img:
+        with PILImage.open(original_image_path) as img:
             original_width, original_height = img.size
 
         logger.info(f"原始图片尺寸: {original_width}x{original_height}")
@@ -791,7 +821,7 @@ def inpaint_image(task):
         # 构建图片URL
         image_url = f"/images/sd/{task_id}/{file_name}"
 
-        logger.info(f"重绘任务完成: task_id={task_id}")
+        logger.info(f"重绘任完成: task_id={task_id}")
         update_task_status(task_id, "重绘完成", 100, inpainted_image_url=image_url)
 
         return {
@@ -851,7 +881,7 @@ def auth_complete():
     }
     jwt_token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
-    # 保存 JWT 和其他信息
+    # 保存 JWT 和他信息
     session['jwt_token'] = jwt_token
     session['access_token'] = user_data['access_token']  # 保存原始 access token
     session['refresh_token'] = user_data['refresh_token']
@@ -970,6 +1000,63 @@ with app.app_context():
 
 # 启动图片清理器
 start_image_cleaner(OUTPUT_DIR, CLEANER_INTERVAL_MINUTES, CLEANER_RETENTION_HOURS)
+
+@app.route('/sd/query_images', methods=['POST'])
+@require_auth
+def query_images():
+    logger.info("收到查询图片请求")
+    
+    # 从会话中获取用户ID
+    user_id = session.get('user_id')
+    if not user_id:
+        logger.warning("未找到有效的用户ID")
+        return jsonify({"error": "未授权访问"}), 401
+
+    data = request.json
+    keyword = data.get('keyword', '')
+    start_date = data.get('start_date')
+    end_date = data.get('end_date')
+
+    logger.info(f"查询参数: user_id={user_id}, keyword='{keyword}', start_date={start_date}, end_date={end_date}")
+
+    try:
+        query = Image.query.filter(Image.user_id == user_id)
+
+        if keyword:
+            query = query.filter(Image.prompt.like(f'%{keyword}%'))
+            logger.info(f"应用关键词过滤: '{keyword}'")
+
+        if start_date:
+            start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
+            query = query.filter(Image.created_at >= start_date_obj)
+            logger.info(f"应用开始日期过滤: {start_date}")
+
+        if end_date:
+            end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
+            query = query.filter(Image.created_at <= end_date_obj)
+            logger.info(f"应用结束日期过滤: {end_date}")
+
+        images = query.order_by(desc(Image.created_at)).all()
+        logger.info(f"查询到 {len(images)} 张图片")
+
+        results = []
+        for image in images:
+            results.append({
+                'id': image.id,
+                'created_at': image.created_at.isoformat(),
+                'prompt': image.prompt,
+                'base64': image.base64,
+                'lora': image.lora,
+                'model': image.model
+            })
+            logger.debug(f"处理图片: id={image.id}, created_at={image.created_at.isoformat()}, prompt='{image.prompt[:50]}...', lora={image.lora}, model={image.model}")
+
+        logger.info(f"返回 {len(results)} 条结果")
+        return jsonify(results)
+
+    except Exception as e:
+        logger.error(f"查询图片时发生错误: {str(e)}")
+        return jsonify({"error": "查询图片时发生错误"}), 500
 
 if __name__ == '__main__':
     logger.info(f"启动服务器,端口 25001, AUTH_SERVICE_URL: {AUTH_SERVICE_URL}")
