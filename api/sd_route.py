@@ -27,6 +27,7 @@ from image_cleaner import start_image_cleaner
 from sqlalchemy import desc
 import sqlite3
 import traceback
+from urllib.parse import urljoin
 
 # 禁用SSL警告（仅用于测试环境）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -345,7 +346,7 @@ def check_prompt_with_chatgpt(prompt):
         return result == '是'
     except Exception as e:
         # logger.error(f"ChatGPT API调用错误: {str(e)}")
-        return False  # 如果API��用失败，我们假设内容是安全的
+        return False  # 如果API用失败，我们假设内容是安全的
 
 def translate_to_english(prompt):
     try:
