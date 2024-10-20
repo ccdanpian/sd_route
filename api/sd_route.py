@@ -193,7 +193,8 @@ def set_model_and_lora(task):
 
 def generate_images(task):
     # 首先设置模型和LoRA
-    set_model_and_lora(task)
+    # webui已经加载过，不需要每次生成图片都设置模型和LoRA
+    # set_model_and_lora(task)
 
     # 然后生成图像
     payload = {
