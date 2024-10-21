@@ -214,6 +214,26 @@ def set_model_and_lora(task):
         # logger.error(f"设置模型和LoRA失败: {str(e)}")
         raise Exception(f"设置模型和LoRA失败: {str(e)}")
 
+def png_to_jpg_base64(png_base64):
+    # 解码 PNG base64 数据
+    png_data = base64.b64decode(png_base64)
+    
+    # 打开 PNG 图像
+    with PILImage.open(io.BytesIO(png_data)) as img:
+        # 转换为 RGB 模式（去除 alpha 通道）
+        img = img.convert('RGB')
+        
+        # 创建一个字节流来保存 JPEG
+        jpg_buffer = io.BytesIO()
+        
+        # 保存为 JPEG，设置质量为 85（可以根据需要调整）
+        img.save(jpg_buffer, format='JPEG', quality=85)
+        
+        # 获取 JPEG 字节数据并编码为 base64
+        jpg_base64 = base64.b64encode(jpg_buffer.getvalue()).decode('utf-8')
+    
+    return jpg_base64
+
 def generate_images(task):
     # 首先设置模型和LoRA
     # webui已经加载，不需要每次生成图片都设置模型和LoRA
@@ -291,11 +311,14 @@ def generate_images(task):
             relative_path = f"/images/sd/{task['task_id']}/{file_name}"
             ai_response_content += f'<img src="{relative_path}" alt="Generated image {i+1}">\n'
 
+            # 将 PNG base64 转换为 JPEG base64
+            jpg_base64 = png_to_jpg_base64(img_data)
+
             # 将图片信息添加到待保存列表
             images_to_save.append({
                 'user_id': task['user_id'],
                 'prompt': task['prompt'],
-                'base64': img_data,
+                'base64': jpg_base64,  # 使用转换后的 JPEG base64
                 'model': SD_MODEL,
                 'lora': task.get('lora', ''),
                 'created_at': datetime.utcnow()
@@ -1017,8 +1040,10 @@ def query_images():
     keyword = data.get('keyword', '')
     start_date = data.get('start_date')
     end_date = data.get('end_date')
+    page = data.get('page', 1)  # 默认第一页
+    per_page = data.get('per_page', 10)  # 默认每页10条
 
-    logger.info(f"查询参数: user_id={user_id}, keyword='{keyword}', start_date={start_date}, end_date={end_date}")
+    logger.info(f"查询参数: user_id={user_id}, keyword='{keyword}', start_date={start_date}, end_date={end_date}, page={page}, per_page={per_page}")
 
     try:
         query = Image.query.filter(Image.user_id == user_id)
@@ -1037,11 +1062,11 @@ def query_images():
             query = query.filter(Image.created_at <= end_date_obj)
             logger.info(f"应用结束日期过滤: {end_date}")
 
-        images = query.order_by(desc(Image.created_at)).all()
-        logger.info(f"查询到 {len(images)} 张图片")
+        total = query.count()
+        images = query.order_by(desc(Image.created_at)).paginate(page=page, per_page=per_page, error_out=False)
 
         results = []
-        for image in images:
+        for image in images.items:
             results.append({
                 'id': image.id,
                 'created_at': image.created_at.isoformat(),
@@ -1052,8 +1077,14 @@ def query_images():
             })
             logger.debug(f"处理图片: id={image.id}, created_at={image.created_at.isoformat()}, prompt='{image.prompt[:50]}...', lora={image.lora}, model={image.model}")
 
-        logger.info(f"返回 {len(results)} 条结果")
-        return jsonify(results)
+        logger.info(f"返回第 {page} 页结果，共 {len(results)} 条")
+        return jsonify({
+            'images': results,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': (total + per_page - 1) // per_page
+        })
 
     except Exception as e:
         logger.error(f"查询图片时发生错误: {str(e)}")

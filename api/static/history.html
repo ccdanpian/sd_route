@@ -99,6 +99,37 @@
             font-style: italic;
             color: #7f8c8d;
         }
+        #pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 20px;
+            flex-direction: column;
+        }
+        .pagination-info {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        .load-more-button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .load-more-button:hover {
+            background-color: #2980b9;
+        }
+        @media (max-width: 600px) {
+            .load-more-button {
+                font-size: 14px;
+                padding: 8px 16px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -110,6 +141,7 @@
         <button id="searchButton">查询</button>
     </div>
     <div id="results" class="results"></div>
+    <div id="pagination"></div>
     <script type="module">
         import { searchImages } from './history.js';
         document.getElementById('searchButton').addEventListener('click', searchImages);
