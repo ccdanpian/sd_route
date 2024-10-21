@@ -51,6 +51,7 @@ function displayResults(images) {
             <div class="image-info">
                 <p><strong>时间：</strong>${new Date(image.created_at).toLocaleString()}</p>
                 <p class="prompt"><strong>Prompt：</strong>${image.prompt}</p>
+                <p><strong>种子：</strong>${image.seed}</p>
                 <p><strong>Model：</strong>${image.model}</p>
                 <p><strong>LoRA：</strong>${image.lora || 'None'}</p>
             </div>
