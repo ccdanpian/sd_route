@@ -1037,7 +1037,7 @@ def query_images():
         return jsonify({"error": "未授权访问"}), 401
 
     data = request.json
-    keyword = data.get('keyword', '')
+    keyword = translate_to_english(data.get('keyword', ''))
     start_date = data.get('start_date')
     end_date = data.get('end_date')
     page = data.get('page', 1)  # 默认第一页
