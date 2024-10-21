@@ -85,5 +85,4 @@ function updatePagination(data) {
 document.addEventListener('DOMContentLoaded', () => {
     const searchButton = document.getElementById('searchButton');
     searchButton.addEventListener('click', () => searchImages(false));
-    searchImages(false);  // 初始加载
 });
