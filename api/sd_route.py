@@ -1041,7 +1041,7 @@ def query_images():
     start_date = data.get('start_date')
     end_date = data.get('end_date')
     page = data.get('page', 1)  # 默认第一页
-    per_page = data.get('per_page', 10)  # 默认每页10条
+    per_page = data.get('per_page', 8)  # 默认每页8条
 
     logger.info(f"查询参数: user_id={user_id}, keyword='{keyword}', start_date={start_date}, end_date={end_date}, page={page}, per_page={per_page}")
 
