@@ -253,7 +253,7 @@ def generate_images(task):
         "batch_size": task['num_images'],
     }
 
-    logger.debug(f"Payload: {json.dumps(payload, indent=2)}")
+    # logger.debug(f"Payload: {json.dumps(payload, indent=2)}")
 
     update_task_status(task['task_id'], f"正在使用模型 {SD_MODEL} 生成图片...", 0)
     try:
@@ -269,20 +269,20 @@ def generate_images(task):
     num_images_received = len(images)
     logger.info(f"生成的图片数量: {num_images_received}")
 
-    logger.debug(f"任务详情: {task}")
-    logger.debug(f"API 响应: {r}")
+    # logger.debug(f"任务详情: {task}")
+    # logger.debug(f"API 响应: {r}")
 
     info = r.get('info', '{}')
     if isinstance(info, str):
         try:
             info = json.loads(info)
-            logger.debug(f"解析后的 info: {info}")
+            # logger.debug(f"解析后的 info: {info}")
         except json.JSONDecodeError:
             logger.error("无法解析 'info' 字符串为 JSON")
             info = {}
 
     seeds = info.get('all_seeds', [task['seed']] * num_images_received)
-    logger.debug(f"种子列表: {seeds}")
+    # logger.debug(f"种子列表: {seeds}")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     task_output_dir = os.path.join(OUTPUT_DIR, task['task_id'])
@@ -296,8 +296,8 @@ def generate_images(task):
     ai_response_content += '<div class="container_sd">\n'
 
     for i, img_data in enumerate(images):
-        logger.debug(f"处理图片 {i+1}/{num_images_received}")
-        logger.debug(f"图片数据前100个字符: {img_data[:100]}")
+        # logger.debug(f"处理图片 {i+1}/{num_images_received}")
+        # logger.debug(f"图片数据前100个字符: {img_data[:100]}")
         
         try:
             # 直接解码 base64 数据
