@@ -50,6 +50,7 @@ class Image(db.Model):
     user_id = db.Column(db.String(50), nullable=False)
     prompt = db.Column(db.Text, nullable=False)
     base64 = db.Column(db.Text, nullable=False)
+    seed = db.Column(db.Integer, nullable=False)
     model = db.Column(db.String(100), nullable=False)
     lora = db.Column(db.String(100))
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
@@ -319,6 +320,7 @@ def generate_images(task):
                 'user_id': task['user_id'],
                 'prompt': task['prompt'],
                 'base64': jpg_base64,  # 使用转换后的 JPEG base64
+                'seed': seeds[i],
                 'model': SD_MODEL,
                 'lora': task.get('lora', ''),
                 'created_at': datetime.utcnow()
@@ -1072,10 +1074,11 @@ def query_images():
                 'created_at': image.created_at.isoformat(),
                 'prompt': image.prompt,
                 'base64': image.base64,
+                'seed': image.seed,
                 'lora': image.lora,
                 'model': image.model
             })
-            logger.debug(f"处理图片: id={image.id}, created_at={image.created_at.isoformat()}, prompt='{image.prompt[:50]}...', lora={image.lora}, model={image.model}")
+            logger.debug(f"处理图片: id={image.id}, created_at={image.created_at.isoformat()}, prompt='{image.prompt[:50]}...', seed={image.seed}, lora={image.lora}, model={image.model}")
 
         logger.info(f"返回第 {page} 页结果，共 {len(results)} 条")
         return jsonify({
