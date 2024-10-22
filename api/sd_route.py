@@ -1093,6 +1093,46 @@ def query_images():
         logger.error(f"查询图片时发生错误: {str(e)}")
         return jsonify({"error": "查询图片时发生错误"}), 500
 
+@app.route('/sd/delete_image', methods=['POST'])
+@require_auth
+def delete_image():
+    logger.info("收到删除图片请求")
+    
+    # 从会话中获取用户ID
+    user_id = session.get('user_id')
+    if not user_id:
+        logger.warning("未找到有效的用户ID")
+        return jsonify({"error": "未授权访问"}), 401
+
+    data = request.json
+    image_id = data.get('image_id')
+
+    if not image_id:
+        logger.warning("未提供图片ID")
+        return jsonify({"error": "未提供图片ID"}), 400
+
+    logger.info(f"尝试删除图片: user_id={user_id}, image_id={image_id}")
+
+    try:
+        # 查找图片并验证所有权
+        image = Image.query.filter_by(id=image_id, user_id=user_id).first()
+
+        if not image:
+            logger.warning(f"未找到图片或用户无权删除: image_id={image_id}")
+            return jsonify({"error": "未找到图片或无权删除"}), 404
+
+        # 删除图片
+        db.session.delete(image)
+        db.session.commit()
+
+        logger.info(f"成功删除图片: image_id={image_id}")
+        return jsonify({"message": "图片已成功删除"}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"删除图片时发生错误: {str(e)}")
+        return jsonify({"error": "删除图片时发生错误"}), 500
+
 if __name__ == '__main__':
     logger.info(f"启动服务器,端口 25001, AUTH_SERVICE_URL: {AUTH_SERVICE_URL}")
     sd_port = os.environ.get('SD_ROUTE_PORT', '25001')  # 假设前端运行在 25001 端口
