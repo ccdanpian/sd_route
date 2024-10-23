@@ -147,10 +147,41 @@ document.addEventListener('DOMContentLoaded', () => {
     // 添加删除按钮
     const deleteButton = document.createElement('button');
     deleteButton.id = 'deleteButton';
-    deleteButton.textContent = '删除图片';
+    deleteButton.className = 'icon-button';
     deleteButton.style.position = 'fixed';
     deleteButton.style.top = '10px';
     deleteButton.style.right = '10px';
+    deleteButton.innerHTML = `
+        <svg width="23" height="23" viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg">
+            <path d="M5 7.5V19.5C5 20.0523 5.44772 20.5 6 20.5H17C17.5523 20.5 18 20.0523 18 19.5V7.5H5Z" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M8.5 10V18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M11.5 10V18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M14.5 10V18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M3.5 5H19.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M9 2.5H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+    `;
     deleteButton.addEventListener('click', toggleDeleteMode);
     document.body.appendChild(deleteButton);
+
+    // 添加样式
+    const style = document.createElement('style');
+    style.textContent = `
+        .icon-button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px;
+            color: #666;
+            transition: color 0.3s ease;
+        }
+        .icon-button:hover {
+            color: #000;
+        }
+        .icon-button:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+        }
+    `;
+    document.head.appendChild(style);
 });
