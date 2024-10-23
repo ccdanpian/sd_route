@@ -772,7 +772,7 @@ def inpaint_image(task):
         mask_image_b64 = encode_image_to_base64(mask_image_path)
 
         # 获取图片尺寸
-        with PILImage.open(mask_image_path) as img:
+        with PILImage.open(original_image_path) as img:
             original_width, original_height = img.size
 
         logger.info(f"原始图片尺寸: {original_width}x{original_height}")
@@ -794,7 +794,7 @@ def inpaint_image(task):
             "cfg_scale": 1,
             "width": original_width,
             "height": original_height,
-            "resize_mode": 2,
+            "resize_mode": 0,
             "mask_blur": 4,
             "inpainting_fill": 1,
             "inpaint_full_res": True,

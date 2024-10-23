@@ -12,6 +12,8 @@ const baseUrl = window.location.origin;
 
 let statusTimeout;
 
+let globalExpandSelect; // 在文件顶部声明
+
 export function openPreviewWindow(src, taskId) {
     // 使用传入的 taskId，而不是全局变量
     
@@ -40,6 +42,27 @@ export function openPreviewWindow(src, taskId) {
     promptContainer.style.alignItems = 'center';
     promptContainer.style.marginBottom = '10px';
 
+    // 添加扩展选择下拉框
+    const expandSelect = document.createElement('select');
+    expandSelect.id = 'expandSelect';
+    expandSelect.style.marginRight = '10px';
+    const expandOptions = [
+        { value: '0', text: '无扩图' },
+        { value: '0.25', text: '扩4/1' },
+        { value: '0.5', text: '扩1/2' },
+        { value: '1', text: '扩1倍' }
+    ];
+    expandOptions.forEach(option => {
+        const optionElement = document.createElement('option');
+        optionElement.value = option.value;
+        optionElement.textContent = option.text;
+        expandSelect.appendChild(optionElement);
+    });
+    promptContainer.appendChild(expandSelect);
+
+    // 添加事件监听器
+    expandSelect.addEventListener('change', handleExpandSelectChange);
+
     const promptInput = document.createElement('input');
     promptInput.type = 'text';
     promptInput.placeholder = '输入重绘 prompt';
@@ -48,8 +71,18 @@ export function openPreviewWindow(src, taskId) {
     promptInput.style.marginRight = '10px';
 
     const sendButton = createButton('发送重绘', () => {
-        document.body.removeChild(previewWindow);  // 关闭预览窗口
-        sendMaskedImage(promptInput.value);
+        if (globalExpandSelect) {
+            document.body.removeChild(previewWindow);
+            // 如果prompt不为空，则使用prompt，否则使用绘图的prompt
+            if(promptInput.value) 
+                prompt = promptInput.value;
+            else
+                prompt = document.getElementById('sd-prompt').value;    
+            sendMaskedImage(prompt);  
+        } else {
+            console.error('Preview window not fully initialized');
+            updateStatus("重绘失败：预览窗口未初始化");
+        }
     });
 
     promptContainer.appendChild(promptInput);
@@ -110,6 +143,8 @@ export function openPreviewWindow(src, taskId) {
     canvas.addEventListener('touchstart', handleTouchStart);
     canvas.addEventListener('touchmove', handleTouchMove);
     canvas.addEventListener('touchend', handleTouchEnd);
+
+    globalExpandSelect = expandSelect; // 设置全局变量
 }
 
 function createButton(text, onClick) {
@@ -147,26 +182,28 @@ function draw(e) {
 
     const maskCtx = maskImage.getContext('2d');
 
-    if (drawMode === 'rectangle') {
-        ctx.putImageData(originalImageData, 0, 0);
-        ctx.strokeStyle = 'white';
-        ctx.strokeRect(startX, startY, x - startX, y - startY);
-    } else {
-        // 在 maskImage 上绘制
-        maskCtx.lineTo(x, y);
-        maskCtx.stroke();
-        
-        // 在 canvas 上实时显示轨迹
-        ctx.putImageData(originalImageData, 0, 0);
-        ctx.globalAlpha = 0.5;
-        ctx.drawImage(maskImage, 0, 0);
-        ctx.globalAlpha = 1.0;
-        
-        // 在 canvas 上绘制当前笔画
-        ctx.strokeStyle = 'white';
-        ctx.lineTo(x, y);
-        ctx.stroke();
-    }
+    requestAnimationFrame(() => {
+        if (drawMode === 'rectangle') {
+            ctx.putImageData(originalImageData, 0, 0);
+            ctx.strokeStyle = 'white';
+            ctx.strokeRect(startX, startY, x - startX, y - startY);
+        } else {
+            // 在 maskImage 上绘制
+            maskCtx.lineTo(x, y);
+            maskCtx.stroke();
+            
+            // 在 canvas 上实时显示轨迹
+            ctx.putImageData(originalImageData, 0, 0);
+            ctx.globalAlpha = 0.5;
+            ctx.drawImage(maskImage, 0, 0);
+            ctx.globalAlpha = 1.0;
+            
+            // 在 canvas 上绘制当前笔画
+            ctx.strokeStyle = 'white';
+            ctx.lineTo(x, y);
+            ctx.stroke();
+        }
+    });
 }
 
 function stopDrawing(e) {
@@ -208,6 +245,12 @@ function resetMask() {
 }
 
 async function sendMaskedImage(inpaintPrompt) {
+    if (!globalExpandSelect) {
+        console.error('Expand select not initialized');
+        updateStatus("重绘失败：扩展选项未初始化");
+        return;
+    }
+    
     if (!maskImage || !originalImage) {
         console.error('maskImage or originalImage is not initialized');
         updateStatus("重绘失败：图像未初始化");
@@ -223,7 +266,9 @@ async function sendMaskedImage(inpaintPrompt) {
     tempCtx.drawImage(originalImage, 0, 0);
     const originalImageData = tempCanvas.toDataURL('image/png');
 
-    const maskedImageData = maskImage.toDataURL('image/png');
+    const expandValue = parseFloat(globalExpandSelect ? globalExpandSelect.value : '0');
+    const expandedMaskImage = expandMask(maskImage, expandValue);
+    const maskedImageData = expandedMaskImage.toDataURL('image/png');
 
     // console.log("***steps:", document.getElementById('sd-steps').value);
 
@@ -408,9 +453,16 @@ function displayInpaintedImage(imageUrl, inpaintPrompt) {
 }
 
 function saveMask() {
+    if (!maskImage) {
+        console.error('Mask image is not initialized');
+        return;
+    }
+    const expandValue = parseFloat(document.getElementById('expandSelect').value);
+    const expandedMaskImage = expandMask(maskImage, expandValue);
+    
     const link = document.createElement('a');
     link.download = 'mask.png';
-    link.href = maskImage.toDataURL('image/png');
+    link.href = expandedMaskImage.toDataURL('image/png');
     link.click();
 }
 
@@ -479,16 +531,14 @@ function hideLoadingIndicator() {
     }
 }
 
-function updateStatus(message, duration = 5000) {
-    // console.log('更新状态:', message);
-    clearTimeout(statusTimeout);  // 清除之前的定时器
+function updateStatus(message, duration = 5000, position = 'top') {
+    clearTimeout(statusTimeout);
 
     let statusElement = document.getElementById('statusMessage');
     if (!statusElement) {
         statusElement = document.createElement('div');
         statusElement.id = 'statusMessage';
         statusElement.style.position = 'fixed';
-        statusElement.style.top = '10px';
         statusElement.style.left = '50%';
         statusElement.style.transform = 'translateX(-50%)';
         statusElement.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
@@ -498,6 +548,15 @@ function updateStatus(message, duration = 5000) {
         statusElement.style.zIndex = '1001';
         statusElement.style.transition = 'opacity 0.5s ease-in-out';
         document.body.appendChild(statusElement);
+    }
+
+    // 根据位置设置 top 或 bottom
+    if (position === 'top') {
+        statusElement.style.top = '10px';
+        statusElement.style.bottom = 'auto';
+    } else {
+        statusElement.style.bottom = '10px';
+        statusElement.style.top = 'auto';
     }
 
     statusElement.textContent = message;
@@ -611,4 +670,61 @@ function handleTouchEnd(e) {
     ctx.globalAlpha = 0.5;
     ctx.drawImage(maskImage, 0, 0);
     ctx.globalAlpha = 1.0;
+}
+
+// 新增扩展蒙版函数
+function expandMask(originalMask, expandRatio) {
+    if (expandRatio === 0 || !originalMask) return originalMask;
+
+    const expandedCanvas = document.createElement('canvas');
+    const expandedWidth = originalMask.width * (1 + 2 * expandRatio);
+    expandedCanvas.width = expandedWidth;
+    expandedCanvas.height = originalMask.height;
+
+    const ctx = expandedCanvas.getContext('2d');
+    
+    // 填充白色背景
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, expandedCanvas.width, expandedCanvas.height);
+
+    // 在中间绘制原始蒙版
+    const offsetX = originalMask.width * expandRatio;
+    ctx.drawImage(originalMask, offsetX, 0);
+
+    return expandedCanvas;
+}
+
+// 新增函数：处理扩展选择变化
+function handleExpandSelectChange(event) {
+    const selectedValue = event.target.value;
+    if (selectedValue !== '0') {
+        showExpandWarning();
+        disableDrawing();
+    } else {
+        enableDrawing();
+    }
+}
+
+// 新增函数：显示扩图警告
+function showExpandWarning() {
+    const warningMessage = '扩图模式不支持MASK';
+    updateStatus(warningMessage, 2000);
+}
+
+// 新增函数：禁用绘制功能
+function disableDrawing() {
+    const canvas = document.getElementById('editCanvas');
+    if (canvas) {
+        canvas.style.pointerEvents = 'none';
+        canvas.style.opacity = '0.5';
+    }
+}
+
+// 新增函数：启用绘制功能
+function enableDrawing() {
+    const canvas = document.getElementById('editCanvas');
+    if (canvas) {
+        canvas.style.pointerEvents = 'auto';
+        canvas.style.opacity = '1';
+    }
 }

@@ -12,8 +12,6 @@ const baseUrl = window.location.origin;
 
 let statusTimeout;
 
-let globalExpandSelect; // 在文件顶部声明
-
 export function openPreviewWindow(src, taskId) {
     // 使用传入的 taskId，而不是全局变量
     
@@ -42,24 +40,6 @@ export function openPreviewWindow(src, taskId) {
     promptContainer.style.alignItems = 'center';
     promptContainer.style.marginBottom = '10px';
 
-    // 添加扩展选择下拉框
-    const expandSelect = document.createElement('select');
-    expandSelect.id = 'expandSelect';
-    expandSelect.style.marginRight = '10px';
-    const expandOptions = [
-        { value: '0', text: '无扩图' },
-        { value: '0.25', text: '扩4/1' },
-        { value: '0.5', text: '扩1/2' },
-        { value: '1', text: '扩1倍' }
-    ];
-    expandOptions.forEach(option => {
-        const optionElement = document.createElement('option');
-        optionElement.value = option.value;
-        optionElement.textContent = option.text;
-        expandSelect.appendChild(optionElement);
-    });
-    promptContainer.appendChild(expandSelect);
-
     const promptInput = document.createElement('input');
     promptInput.type = 'text';
     promptInput.placeholder = '输入重绘 prompt';
@@ -68,13 +48,8 @@ export function openPreviewWindow(src, taskId) {
     promptInput.style.marginRight = '10px';
 
     const sendButton = createButton('发送重绘', () => {
-        if (globalExpandSelect) {
-            document.body.removeChild(previewWindow);
-            sendMaskedImage(promptInput.value);
-        } else {
-            console.error('Preview window not fully initialized');
-            updateStatus("重绘失败：预览窗口未初始化");
-        }
+        document.body.removeChild(previewWindow);  // 关闭预览窗口
+        sendMaskedImage(promptInput.value);
     });
 
     promptContainer.appendChild(promptInput);
@@ -135,8 +110,6 @@ export function openPreviewWindow(src, taskId) {
     canvas.addEventListener('touchstart', handleTouchStart);
     canvas.addEventListener('touchmove', handleTouchMove);
     canvas.addEventListener('touchend', handleTouchEnd);
-
-    globalExpandSelect = expandSelect; // 设置全局变量
 }
 
 function createButton(text, onClick) {
@@ -174,28 +147,26 @@ function draw(e) {
 
     const maskCtx = maskImage.getContext('2d');
 
-    requestAnimationFrame(() => {
-        if (drawMode === 'rectangle') {
-            ctx.putImageData(originalImageData, 0, 0);
-            ctx.strokeStyle = 'white';
-            ctx.strokeRect(startX, startY, x - startX, y - startY);
-        } else {
-            // 在 maskImage 上绘制
-            maskCtx.lineTo(x, y);
-            maskCtx.stroke();
-            
-            // 在 canvas 上实时显示轨迹
-            ctx.putImageData(originalImageData, 0, 0);
-            ctx.globalAlpha = 0.5;
-            ctx.drawImage(maskImage, 0, 0);
-            ctx.globalAlpha = 1.0;
-            
-            // 在 canvas 上绘制当前笔画
-            ctx.strokeStyle = 'white';
-            ctx.lineTo(x, y);
-            ctx.stroke();
-        }
-    });
+    if (drawMode === 'rectangle') {
+        ctx.putImageData(originalImageData, 0, 0);
+        ctx.strokeStyle = 'white';
+        ctx.strokeRect(startX, startY, x - startX, y - startY);
+    } else {
+        // 在 maskImage 上绘制
+        maskCtx.lineTo(x, y);
+        maskCtx.stroke();
+        
+        // 在 canvas 上实时显示轨迹
+        ctx.putImageData(originalImageData, 0, 0);
+        ctx.globalAlpha = 0.5;
+        ctx.drawImage(maskImage, 0, 0);
+        ctx.globalAlpha = 1.0;
+        
+        // 在 canvas 上绘制当前笔画
+        ctx.strokeStyle = 'white';
+        ctx.lineTo(x, y);
+        ctx.stroke();
+    }
 }
 
 function stopDrawing(e) {
@@ -237,12 +208,6 @@ function resetMask() {
 }
 
 async function sendMaskedImage(inpaintPrompt) {
-    if (!globalExpandSelect) {
-        console.error('Expand select not initialized');
-        updateStatus("重绘失败：扩展选项未初始化");
-        return;
-    }
-    
     if (!maskImage || !originalImage) {
         console.error('maskImage or originalImage is not initialized');
         updateStatus("重绘失败：图像未初始化");
@@ -258,9 +223,7 @@ async function sendMaskedImage(inpaintPrompt) {
     tempCtx.drawImage(originalImage, 0, 0);
     const originalImageData = tempCanvas.toDataURL('image/png');
 
-    const expandValue = parseFloat(globalExpandSelect ? globalExpandSelect.value : '0');
-    const expandedMaskImage = expandMask(maskImage, expandValue);
-    const maskedImageData = expandedMaskImage.toDataURL('image/png');
+    const maskedImageData = maskImage.toDataURL('image/png');
 
     // console.log("***steps:", document.getElementById('sd-steps').value);
 
@@ -445,16 +408,9 @@ function displayInpaintedImage(imageUrl, inpaintPrompt) {
 }
 
 function saveMask() {
-    if (!maskImage) {
-        console.error('Mask image is not initialized');
-        return;
-    }
-    const expandValue = parseFloat(document.getElementById('expandSelect').value);
-    const expandedMaskImage = expandMask(maskImage, expandValue);
-    
     const link = document.createElement('a');
     link.download = 'mask.png';
-    link.href = expandedMaskImage.toDataURL('image/png');
+    link.href = maskImage.toDataURL('image/png');
     link.click();
 }
 
@@ -656,26 +612,3 @@ function handleTouchEnd(e) {
     ctx.drawImage(maskImage, 0, 0);
     ctx.globalAlpha = 1.0;
 }
-
-// 新增扩展蒙版函数
-function expandMask(originalMask, expandRatio) {
-    if (expandRatio === 0 || !originalMask) return originalMask;
-
-    const expandedCanvas = document.createElement('canvas');
-    const expandedWidth = originalMask.width * (1 + 2 * expandRatio);
-    expandedCanvas.width = expandedWidth;
-    expandedCanvas.height = originalMask.height;
-
-    const ctx = expandedCanvas.getContext('2d');
-    
-    // 填充白色背景
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, expandedCanvas.width, expandedCanvas.height);
-
-    // 在中间绘制原始蒙版
-    const offsetX = originalMask.width * expandRatio;
-    ctx.drawImage(originalMask, offsetX, 0);
-
-    return expandedCanvas;
-}
-

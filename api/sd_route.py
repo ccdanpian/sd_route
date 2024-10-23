@@ -775,16 +775,24 @@ def inpaint_image(task):
         with PILImage.open(original_image_path) as img:
             original_width, original_height = img.size
 
-        logger.info(f"原始图片尺寸: {original_width}x{original_height}")
+        # 获取蒙版图片尺寸
+        with PILImage.open(mask_image_path) as img:
+            mask_width, mask_height = img.size
 
+        logger.info(f"原始图片尺寸: {original_width}x{original_height}")
+        logger.info(f"蒙版图片尺寸: {mask_width}x{mask_height}")
         update_task_status(task_id, "正在设置模型", 10)
         # 设置模型和LoRA
         set_model_and_lora(task)
 
-        # 构建 payload
+        # 构建 payload, 如果蒙版图片尺寸和原始图片尺寸不一致，则使用蒙版图片尺寸，并且不使用蒙版图片
+        # 即不一致的时候，为扩图模式
+        # 一致的时候，为重绘模式
+        width = original_width if original_width == mask_width and original_height == mask_height else mask_width
+        height = original_height if original_width == mask_width and original_height == mask_height else mask_height
         payload = {
             "init_images": [original_image_b64],
-            "mask": mask_image_b64,
+            # "mask": mask_image_b64,
             "prompt": prompt,
             "negative_prompt": "",
             "seed": -1,
@@ -792,9 +800,9 @@ def inpaint_image(task):
             "n_iter": 1,
             "steps": steps,  # 使用传入的 steps，如果没有则默认为 30
             "cfg_scale": 1,
-            "width": original_width,
-            "height": original_height,
-            "resize_mode": 0,
+            "width": width,
+            "height": height,
+            "resize_mode": 2,
             "mask_blur": 4,
             "inpainting_fill": 1,
             "inpaint_full_res": True,
@@ -816,6 +824,9 @@ def inpaint_image(task):
             "save_images": False,
             "alwayson_scripts": {}
         }
+
+        if width == original_width and height == original_height:
+            payload['mask'] = mask_image_b64
 
         update_task_status(task_id, "正在发送重绘请求", 30)
         # 发送请求到 SD API
