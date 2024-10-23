@@ -11,22 +11,31 @@
         #history-btn {
             position: fixed;
             top: 10px;
-            left: 10px;
+            right: 120px; /* 调整位置到右上角，留出用户信息的空间 */
             font-size: 24px;
             background: none;
             border: none;
             cursor: pointer;
             z-index: 1000;
-            color: #333; /* 设置一个适合您页面的颜色 */
+            color: #333;
         }
         #history-btn:hover {
-            color: #007bff; /* 鼠标悬停时的颜色 */
+            color: #007bff;
+        }
+        #history-btn svg {
+            width: 23px;
+            height: 23px;
         }
     </style>
 </head>
 <body>
-    <!-- 添加历史按钮 -->
-    <button id="history-btn"><i class="fas fa-history"></i></button>
+    <!-- 更新历史按钮 -->
+    <button id="history-btn">
+        <svg viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="2" fill="none"/>
+            <line x1="14" y1="14" x2="20" y2="20" stroke="currentColor" stroke-width="2"/>
+        </svg>
+    </button>
 
     <div class="container">
         <div class="header">
@@ -166,11 +175,12 @@
     </script>
 
     <script type="module" src="static/sd.js"></script>
-    <script type="module" src="static/history.js"></script>
 
     <!-- 添加历史功能脚本 -->
     <script type="module">
-        import { openHistoryTab } from './static/history.js';
+        function openHistoryTab() {
+    window.open('./static/history.html', '_blank');
+}
         document.getElementById('history-btn').addEventListener('click', openHistoryTab);
     </script>
 </body>

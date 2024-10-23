@@ -1,9 +1,5 @@
 import { apiRequest } from './api.js';
 
-export function openHistoryTab() {
-    window.open('./static/history.html', '_blank');
-}
-
 let currentPage = 1;
 let totalPages = 1;
 const perPage = 10;
