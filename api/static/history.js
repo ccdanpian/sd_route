@@ -44,13 +44,14 @@ function displayResults(images) {
     images.forEach(image => {
         const card = document.createElement('div');
         card.className = 'image-card';
+        card.setAttribute('data-image-id', image.id); // 添加这一行
         card.innerHTML = `
             <div class="image-wrapper">
                 <img src="data:image/jpeg;base64,${image.base64}" alt="Generated Image">
                 <button class="delete-icon" style="display: ${isDeleteMode ? 'block' : 'none'};">X</button>
             </div>
             <div class="image-info">
-                <p><strong>时间：</strong>${new Date(image.created_at).toLocaleString()}</p>
+                <p><strong>时间：</strong>${new Date(image.created_at + ' UTC').toLocaleString()}</p>
                 <p class="prompt"><strong>Prompt：</strong><span class="prompt-text">${image.prompt}</span></p>
                 <p><strong>种子：</strong>${image.seed}</p>
                 <p><strong>Model：</strong>${image.model}</p>
@@ -126,9 +127,12 @@ async function deleteImage(imageId) {
     if (confirm('确定要删除这张图片吗？')) {
         try {
             await apiRequest('/sd/delete_image', 'POST', { image_id: imageId });
+            // 找到并删除对应的图片卡片
+            const card = document.querySelector(`.image-card[data-image-id="${imageId}"]`);
+            if (card) {
+                card.remove();
+            }
             alert('图片已成功删除');
-            // 重新加载图片列表
-            searchImages(false);
         } catch (error) {
             console.error('删除图片时出错:', error);
             alert('删除图片时出错，请稍后再试。');
