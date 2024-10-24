@@ -823,9 +823,15 @@ def inpaint_image(task):
         if mask_width == original_width and mask_height == original_height:
             logger.info("图片尺寸一致，使用MASK蒙版图片进行重绘")
             payload['mask'] = mask_image_b64
-            payload['denoising_strength'] = 0.75
+            payload['denoising_strength'] = 0.7
             payload['mask_blur'] = 8
             payload['resize_mode'] = 0
+            payload['mask_mode'] = 0
+        else:
+            logger.info("图片尺寸不一致，不使用MASK蒙版图片进行重绘")
+            payload['denoising_strength'] = 0.7
+            payload['mask_blur'] = 4
+            payload['resize_mode'] = 2
             payload['mask_mode'] = 0
 
         update_task_status(task_id, "正在发送重绘请求", 30)
