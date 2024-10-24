@@ -799,7 +799,6 @@ def inpaint_image(task):
             "width": mask_width,
             "height": mask_height,
             "resize_mode": 2,
-            "mask_blur": 8,
             "inpainting_fill": 1,
             "inpaint_full_res": True,
             "inpaint_full_res_padding": 32,
@@ -807,7 +806,6 @@ def inpaint_image(task):
             "sampler_index": "Euler",
             "scheduler": "Simple",
             "denoising_strength": 0.55,
-            "mask_mode": 0,
             "inpainting_mask_invert": 0,
             "override_settings": {
                 "sd_model_checkpoint": model_name
@@ -823,8 +821,12 @@ def inpaint_image(task):
 
         # 如果图片尺寸一致，即不是扩图，只是MASK，则使用蒙版图片
         if mask_width == original_width and mask_height == original_height:
+            logger.info("图片尺寸一致，使用MASK蒙版图片进行重绘")
             payload['mask'] = mask_image_b64
             payload['denoising_strength'] = 0.75
+            payload['mask_blur'] = 8
+            payload['resize_mode'] = 0
+            payload['mask_mode'] = 0
 
         update_task_status(task_id, "正在发送重绘请求", 30)
         # 发送请求到 SD API
