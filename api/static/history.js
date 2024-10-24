@@ -51,7 +51,7 @@ function displayResults(images) {
                 <button class="delete-icon" style="display: ${isDeleteMode ? 'block' : 'none'};">X</button>
             </div>
             <div class="image-info">
-                <p><strong>时间：</strong>${new Date(image.created_at + ' UTC').toLocaleString()}</p>
+                <p><strong>时间：</strong>${new Date(image.created_at + 'Z').toLocaleString()}</p>
                 <p class="prompt"><strong>Prompt：</strong><span class="prompt-text">${image.prompt}</span></p>
                 <p><strong>种子：</strong>${image.seed}</p>
                 <p><strong>Model：</strong>${image.model}</p>
