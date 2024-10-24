@@ -426,6 +426,7 @@ function displayInpaintedImage(imageUrl, inpaintPrompt) {
     // 创建图片容器
     const imageContainer = document.createElement('div');
     imageContainer.style.textAlign = 'center';
+    imageContainer.style.position = 'relative';
     resultContainer.appendChild(imageContainer);
 
     // 添加重绘图片
@@ -445,11 +446,77 @@ function displayInpaintedImage(imageUrl, inpaintPrompt) {
     imageContainer.appendChild(resultImage);
     console.log('添加了结果图片');
 
+    // 添加发送到上方的按钮
+    const sendToTopButton = document.createElement('button');
+    sendToTopButton.textContent = '发送到上方';
+    sendToTopButton.style.position = 'absolute';
+    sendToTopButton.style.top = '10px';
+    sendToTopButton.style.right = '10px';
+    sendToTopButton.style.backgroundColor = '#4CAF50';
+    sendToTopButton.style.color = 'white';
+    sendToTopButton.style.border = 'none';
+    sendToTopButton.style.borderRadius = '5px';
+    sendToTopButton.style.padding = '10px';
+    sendToTopButton.style.fontSize = '16px';
+    sendToTopButton.style.cursor = 'pointer';
+    sendToTopButton.style.zIndex = '10';  // 确保按钮在图片上方
+    sendToTopButton.onclick = function() {
+        sendImageToTop(fullImageUrl, inpaintPrompt);
+    };
+    imageContainer.appendChild(sendToTopButton);
+    console.log('添加了发送到上方的按钮');
+
     // 显示容器
     resultContainer.style.display = 'block';
     console.log('设置 resultContainer 为显示状态');
 
     console.log('displayInpaintedImage 函数执行完毕');
+}
+
+function sendImageToTop(imageUrl, prompt) {
+    console.log('开始执行 sendImageToTop 函数');
+    console.log('imageUrl:', imageUrl);
+    console.log('prompt:', prompt);
+
+    // 查找原图容器
+    const originalImageContainer = document.getElementById('sd-result-container');
+    if (originalImageContainer) {
+        console.log('找到原图容器');
+
+        // 查找原图容器中的图片元素
+        const originalImage = originalImageContainer.querySelector('img');
+        if (originalImage) {
+            console.log('找到原图元素');
+
+            // 替换原图的 src
+            originalImage.src = imageUrl;
+            console.log('替换了原图的 src');
+
+            // 更新相关的输入字段
+            const promptInput = document.getElementById('sd-prompt');
+            if (promptInput) {
+                promptInput.value = prompt;
+                console.log('更新了 prompt 输入字段');
+            } else {
+                console.log('未找到 prompt 输入字段');
+            }
+
+            // 滚动到页面顶部
+            window.scrollTo(0, 0);
+            console.log('滚动到页面顶部');
+
+            // 显示一个提示消息
+            updateStatus("图片已发送到上方，可以继续编辑", 3000);
+        } else {
+            console.error('未在原图容器中找到图片元素');
+            updateStatus("操作失败：未找到原图元素", 3000);
+        }
+    } else {
+        console.error('未找到原图容器');
+        updateStatus("操作失败：未找到原图容器", 3000);
+    }
+
+    console.log('sendImageToTop 函数执行完毕');
 }
 
 function saveMask() {
@@ -728,3 +795,4 @@ function enableDrawing() {
         canvas.style.opacity = '1';
     }
 }
+

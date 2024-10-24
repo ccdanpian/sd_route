@@ -342,3 +342,25 @@ h1 {
 #logout-btn:hover {
     background-color: #d32f2f;
 }
+
+.send-to-top-icon {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background-color: rgba(255, 255, 255, 0.7);
+    color: #333;
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: background-color 0.3s;
+}
+
+.send-to-top-icon:hover {
+    background-color: rgba(255, 255, 255, 0.9);
+}
