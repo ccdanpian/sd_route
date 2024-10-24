@@ -782,14 +782,10 @@ def inpaint_image(task):
         logger.info(f"原始图片尺寸: {original_width}x{original_height}")
         logger.info(f"蒙版图片尺寸: {mask_width}x{mask_height}")
         update_task_status(task_id, "正在设置模型", 10)
-        # 设置模型和LoRA
-        set_model_and_lora(task)
 
-        # 构建 payload, 如果蒙版图片尺寸和原始图片尺寸不一致，则使用蒙版图片尺寸，并且不使用蒙版图片
-        # 即不一致的时候，为扩图模式
-        # 一致的时候，为重绘模式
-        width = original_width if original_width == mask_width and original_height == mask_height else mask_width
-        height = original_height if original_width == mask_width and original_height == mask_height else mask_height
+        # 设置模型和LoRA
+        # set_model_and_lora(task)
+
         payload = {
             "init_images": [original_image_b64],
             # "mask": mask_image_b64,
@@ -800,17 +796,17 @@ def inpaint_image(task):
             "n_iter": 1,
             "steps": steps,  # 使用传入的 steps，如果没有则默认为 30
             "cfg_scale": 1,
-            "width": width,
-            "height": height,
+            "width": mask_width,
+            "height": mask_height,
             "resize_mode": 2,
-            "mask_blur": 4,
+            "mask_blur": 8,
             "inpainting_fill": 1,
             "inpaint_full_res": True,
             "inpaint_full_res_padding": 32,
             "sampler_name": "Euler",
             "sampler_index": "Euler",
             "scheduler": "Simple",
-            "denoising_strength": 0.75,
+            "denoising_strength": 0.55,
             "mask_mode": 0,
             "inpainting_mask_invert": 0,
             "override_settings": {
@@ -825,8 +821,10 @@ def inpaint_image(task):
             "alwayson_scripts": {}
         }
 
-        if width == original_width and height == original_height:
+        # 如果图片尺寸一致，即不是扩图，只是MASK，则使用蒙版图片
+        if mask_width == original_width and mask_height == original_height:
             payload['mask'] = mask_image_b64
+            payload['denoising_strength'] = 0.75
 
         update_task_status(task_id, "正在发送重绘请求", 30)
         # 发送请求到 SD API
