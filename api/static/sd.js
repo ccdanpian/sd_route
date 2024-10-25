@@ -142,7 +142,7 @@ function fetchUserInfo() {
             }
         })
         .catch(error => {
-            console.error('获取用户信息时出错:', error);
+            console.error('获取用户��息时出错:', error);
             updateDebugLog('获取用户信息时出错:', error);
             isAuthenticated = false;
             updateUIForAuth();
@@ -452,19 +452,18 @@ function displayImages(taskId, fileNames, seeds, translatedPrompt) {
     const imageContainer = document.createElement('div');
     imageContainer.className = 'container_images_sd';
     imageContainer.dataset.taskId = taskId;
-    // 添加 Flexbox 样式
     imageContainer.style.display = 'flex';
     imageContainer.style.flexWrap = 'wrap';
     imageContainer.style.justifyContent = 'center';
-    imageContainer.style.gap = '10px'; // 设置图片之间的间距
+    imageContainer.style.gap = '10px';
 
     fileNames.forEach((fileName, index) => {
         const imageWrapper = document.createElement('div');
         imageWrapper.className = 'image-wrapper';
-        // 设置图片包装器的样式
         imageWrapper.style.display = 'flex';
         imageWrapper.style.flexDirection = 'column';
         imageWrapper.style.alignItems = 'center';
+        imageWrapper.style.position = 'relative'; // 添加相对定位
 
         const img = document.createElement('img');
         img.src = `${apiUrl}/images/sd/${taskId}/${fileName}`;
@@ -472,29 +471,88 @@ function displayImages(taskId, fileNames, seeds, translatedPrompt) {
         img.className = 'sd-image';
         img.dataset.taskId = taskId;
         img.addEventListener('click', () => openPreviewWindow(img.src, taskId));
-        // 设置片的最大宽度，确保它们不会太大
         img.style.maxWidth = '100%';
         img.style.height = 'auto';
 
+        const infoContainer = document.createElement('div');
+        infoContainer.style.display = 'flex';
+        infoContainer.style.justifyContent = 'space-between';
+        infoContainer.style.width = '100%';
+        infoContainer.style.marginTop = '5px';
+
         const seedInfo = document.createElement('div');
         seedInfo.textContent = `种子：${seeds[index]}`;
-        seedInfo.style.marginTop = '5px'; // 为种信息添加一些边距
+
+        const uploadButton = document.createElement('button');
+        uploadButton.textContent = '上传本地图片';
+        uploadButton.style.backgroundColor = '#4CAF50';
+        uploadButton.style.color = 'white';
+        uploadButton.style.border = 'none';
+        uploadButton.style.padding = '5px 10px';
+        uploadButton.style.borderRadius = '3px';
+        uploadButton.style.cursor = 'pointer';
+        uploadButton.onclick = () => uploadLocalImage(img);
+
+        infoContainer.appendChild(seedInfo);
+        infoContainer.appendChild(uploadButton);
 
         imageWrapper.appendChild(img);
-        imageWrapper.appendChild(seedInfo);
+        imageWrapper.appendChild(infoContainer);
         imageContainer.appendChild(imageWrapper);
     });
 
     sdResultContainer.appendChild(imageContainer);
 
     if (DEBUG_MODE) {
-        // 更新 SD 容器中的图片（仅在调试模式下）
         const taskElement = document.getElementById(`sd-task-${taskId}`);
         if (taskElement) {
             const debugImageContainer = taskElement.querySelector('.imageContainer');
             debugImageContainer.innerHTML = imageContainer.innerHTML;
         }
     }
+}
+
+function uploadLocalImage(targetImg) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            try {
+                const compressedImage = await compressImageIfNeeded(file);
+                const imageUrl = URL.createObjectURL(compressedImage);
+                targetImg.src = imageUrl;
+                updateStatus('图片已成功替换', 3000);
+            } catch (error) {
+                console.error('Error processing image:', error);
+                updateStatus('图片处理失败，请重试', 3000);
+            }
+        }
+    };
+    input.click();
+}
+
+async function compressImageIfNeeded(file) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = function() {
+            URL.revokeObjectURL(img.src);
+            if (img.width > 1024 || img.height > 1024) {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const scale = Math.min(1024 / img.width, 1024 / img.height);
+                canvas.width = img.width * scale;
+                canvas.height = img.height * scale;
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                canvas.toBlob(resolve, 'image/jpeg', 0.9);
+            } else {
+                resolve(file);
+            }
+        };
+        img.onerror = reject;
+        img.src = URL.createObjectURL(file);
+    });
 }
 
 // 辅助函数：获取 cookie 值
