@@ -501,22 +501,34 @@ def generate():
                 return jsonify({"error": "您已有一个活跃请求，请等待当前请求完成后再试"}), 429
             active_ip_requests[ip_address] = True
 
-    prompt = data.get('prompt', '')
-    if not prompt:
-        if ENABLE_IP_RESTRICTION:
-            with ip_lock:
-                active_ip_requests.pop(ip_address, None)
-        return jsonify({"error": "提示词不能为空"}), 400
-
+    prompt = data.get('prompt')
+    
+    # 检查提示词是否为 None 或空字符串
+    if prompt is None or prompt.strip() == '':
+        prompt = ''  # 如果为 None，将其设置为空字符串
+        logger.info("收到空提示词")
+    else:
+        prompt = prompt.strip()  # 移除首尾的空白字符
+    
     try:
-        contains_inappropriate_content = check_prompt_with_chatgpt(prompt)
+        contains_inappropriate_content = check_prompt_with_chatgpt(prompt) if prompt else False
         if contains_inappropriate_content:
             if ENABLE_IP_RESTRICTION:
                 with ip_lock:
                     active_ip_requests.pop(ip_address, None)
             return jsonify({"error": "提示词可能包含不适当的内容。请修改后重试。"}), 400
 
-        translated_prompt = translate_to_english(prompt)
+        translated_prompt = translate_to_english(prompt) if prompt else ''
+        
+        # 处理翻译后的提示词
+        if translated_prompt is None or translated_prompt.strip() == '':
+            translated_prompt = ''
+            logger.info("翻译后得到空提示词")
+        else:
+            translated_prompt = translated_prompt.strip()
+
+        task_id = str(uuid4())
+        logger.info(f"创建新的重绘任务: task_id={task_id}, original_prompt='{prompt}', translated_prompt='{translated_prompt}'")
 
         # 构建模型参数
         model_params = SD_MODEL
@@ -665,7 +677,7 @@ def inpaint():
             'steps': data.get('steps', 30),
             'original_image': data.get('original_image'),
             'mask_image': data.get('mask_image'),
-            'inpaint_strength': data.get('inpaint_strength', 0.7),
+            'denoising_strength': data.get('denoising_strength', 0.7),
             'model_name': data.get('model_name', "realisticVisionV51_v51VAE.safetensors"),
             'model': SD_MODEL,
             'ip_address': ip_address
@@ -820,19 +832,20 @@ def inpaint_image(task):
         if mask_width == original_width and mask_height == original_height:
             logger.info("图片尺寸一致，使用MASK蒙版图片进行重绘")
             payload['mask'] = mask_image_b64
-            payload['denoising_strength'] = task.get('inpaint_strength', 0.7)
+            payload['denoising_strength'] = task.get('denoising_strength', 0.7)
             payload['mask_blur'] = 8
             payload['resize_mode'] = 0
             payload['mask_mode'] = 0
         else:
             logger.info("图片尺寸不一致，不使用MASK蒙版图片进行重绘")
             payload['prompt'] = ''
-            payload['denoising_strength'] = task.get('inpaint_strength', 0.7)
+            payload['denoising_strength'] = task.get('denoising_strength', 0.7)
             payload['mask_blur'] = 4
             payload['resize_mode'] = 2
             payload['mask_mode'] = 0
 
-        logger.info(f"重绘请求参数: {payload}")
+        logger.info(f"重绘强度: {payload['denoising_strength']}")
+        logger.info(f"***重绘prompt: {payload['prompt']}")
 
         update_task_status(task_id, "正在发送重绘请求", 30)
         # 发送请求到 SD API
