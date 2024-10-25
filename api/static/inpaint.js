@@ -156,11 +156,16 @@ function createButton(text, onClick) {
 
 function startDrawing(e) {
     isDrawing = true;
-    const rect = e.target.getBoundingClientRect();
-    startX = (e.clientX || e.touches[0].clientX) - rect.left;
-    startY = (e.clientY || e.touches[0].clientY) - rect.top;
-
     const canvas = document.getElementById('editCanvas');
+    const rect = canvas.getBoundingClientRect();
+    
+    // 计算画布的实际缩放比例
+    const scaleY = canvas.height / rect.height;
+    const scaleX = scaleY;
+
+    startX = (e.clientX - rect.left) * scaleX;
+    startY = (e.clientY - rect.top) * scaleY;
+
     const ctx = canvas.getContext('2d');
     const maskCtx = maskImage.getContext('2d');
 
@@ -177,8 +182,13 @@ function draw(e) {
     const canvas = document.getElementById('editCanvas');
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX || e.touches[0].clientX) - rect.left;
-    const y = (e.clientY || e.touches[0].clientY) - rect.top;
+    
+    // 计算画布的实际缩放比例
+    const scaleY = canvas.height / rect.height;
+    const scaleX = scaleY;
+    
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
 
     const maskCtx = maskImage.getContext('2d');
 
@@ -212,11 +222,15 @@ function stopDrawing(e) {
     const canvas = document.getElementById('editCanvas');
     const ctx = canvas.getContext('2d');
     const maskCtx = maskImage.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    
+    // 计算画布的实际缩放比例
+    const scaleY = canvas.height / rect.height;
+    const scaleX = scaleY;
 
     if (drawMode === 'rectangle') {
-        const rect = canvas.getBoundingClientRect();
-        const endX = (e.clientX || (e.changedTouches && e.changedTouches[0].clientX)) - rect.left;
-        const endY = (e.clientY || (e.changedTouches && e.changedTouches[0].clientY)) - rect.top;
+        const endX = (e.clientX - rect.left) * scaleX;
+        const endY = (e.clientY - rect.top) * scaleY;
         maskCtx.fillStyle = 'white';
         maskCtx.fillRect(startX, startY, endX - startX, endY - startY);
     } else {
@@ -552,8 +566,12 @@ function handleTouchStart(e) {
     const rect = canvas.getBoundingClientRect();
     
     // 计算画布的实际缩放比例
-    const scaleX = canvas.width / rect.width;
+    // const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
+    const scaleX = scaleY;
+
+    console.log("start scaleX:", scaleX);
+    console.log("start scaleY:", scaleY);
     
     startX = (touch.clientX - rect.left) * scaleX;
     startY = (touch.clientY - rect.top) * scaleY;
@@ -584,6 +602,9 @@ function handleTouchMove(e) {
     // const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     const scaleX = scaleY;
+    
+    console.log("move scaleX:", scaleX);
+    console.log("move scaleY:", scaleY);
     
     const x = (touch.clientX - rect.left) * scaleX;
     const y = (touch.clientY - rect.top) * scaleY;
@@ -626,6 +647,9 @@ function handleTouchEnd(e) {
     // const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     const scaleX = scaleY;
+
+    console.log("end scaleX:", scaleX);
+    console.log("end scaleY:", scaleY);
 
     if (drawMode === 'rectangle') {
         const touch = e.changedTouches[0];
