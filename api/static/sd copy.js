@@ -24,11 +24,11 @@ export function checkAuthStatus() {
         const tokenExists = cookieExists('jwt_token');
         const token = tokenExists ? '无法读取但存在' : localStorage.getItem('jwt_token');
         
-        // onsole.log('JWT token 状态:', tokenExists ? '存在于 cookie 中' : (token ? '存在于 localStorage 中' : '未找到'));
+        console.log('JWT token 状态:', tokenExists ? '存在于 cookie 中' : (token ? '存在于 localStorage 中' : '未找到'));
         updateDebugLog('JWT token 状态: ' + (tokenExists ? '存在于 cookie 中' : (token ? '存在于 localStorage 中' : '未找到')));
         
         if (tokenExists || token) {
-            // console.log('找到访问令牌');
+            console.log('找到访问令牌');
             updateDebugLog('找到访问令牌');
             if (token && token !== '无法读取但存在') {
                 localStorage.setItem('jwt_token', token);
@@ -36,7 +36,7 @@ export function checkAuthStatus() {
             setToken(token);
             fetchUserInfo();
         } else {
-            // console.log('未找到访问令牌，显示登录按钮');
+            console.log('未找到访问令牌，显示登录按钮');
             updateDebugLog('未找到访问令牌，显示登录按钮');
             showLoginButton();
         }
@@ -137,12 +137,12 @@ function fetchUserInfo() {
             if (data.loraModels) {
                 populateLoraSelect(data.loraModels);
             } else {
-                console.warn('未收到 Lora 模型列');
+                console.warn('未收到 Lora 模型列表');
                 updateDebugLog('未收到 Lora 模型列表');
             }
         })
         .catch(error => {
-            console.error('获取用户息时出错:', error);
+            console.error('获取用户��息时出错:', error);
             updateDebugLog('获取用户信息时出错:', error);
             isAuthenticated = false;
             updateUIForAuth();
@@ -226,20 +226,6 @@ export function handleCallback() {
 export function initSD() {
     console.debug('初始化SD模块');
     initDebugMode();
-    
-    // 获取状态容器
-    const statusContainer = document.getElementById('sd-status-container');
-    if (!statusContainer) {
-        console.error('未找到 sd-status-container 元素');
-        return;
-    }
-
-    // 设置状态容器的样式
-    statusContainer.style.display = 'flex';
-    statusContainer.style.alignItems = 'center';
-    statusContainer.style.width = '100%';
-
-    // 获取并设置生成按钮
     generateBtn = document.getElementById('sd-generate-btn');
     if (generateBtn) {
         generateBtn.addEventListener('click', generateImages);
@@ -247,11 +233,8 @@ export function initSD() {
     } else {
         console.error('在DOM中未找到生成按钮');
     }
-
-    // 删除这行
-    // addUploadButtonToTopRight();
-
     checkAuthStatus();
+    // 不要在这里单独调用 updateLoraWeight，因为它会在 populateLoraSelect 中被设置为事件监听器
 }
 
 async function generateImages() {
@@ -365,7 +348,7 @@ function createTaskStatusElement(taskId, queuePosition, maxQueueSize) {
     const taskElement = document.createElement('div');
     taskElement.id = `sd-task-${taskId}`;
     taskElement.innerHTML = `
-        <div class="task-status">任务ID: ${taskId} - 列位置: ${queuePosition + 1}/${maxQueueSize}</div>
+        <div class="task-status">任务ID: ${taskId} - 队列位置: ${queuePosition + 1}/${maxQueueSize}</div>
         <div class="imageContainer"></div>
     `;
     taskContainer.appendChild(taskElement);
@@ -438,16 +421,21 @@ function finishCurrentTask() {
     processNextTask();
 }
 
-function updateStatus(message, duration = 0) {
+function updateStatus(message, queuePosition, maxQueueSize) {
     const statusContainer = document.getElementById('sd-status-container');
     if (statusContainer) {
-        statusContainer.textContent = message;
-
-        if (duration > 0) {
-            setTimeout(() => {
-                statusContainer.textContent = '';
-            }, duration);
+        let statusText = '';
+        
+        if (message === "排队中" && queuePosition !== undefined) {
+            statusText = `状态：正在排队，当前位置：${queuePosition + 1}/${maxQueueSize}`;
+        } else if (typeof message === 'object' && message.error) {
+            // 处理错误对
+            statusText = `状态：生成失败：${message.error}`;
+        } else {
+            statusText = `状态：${message}`;
         }
+        
+        statusContainer.textContent = statusText;
     } else {
         console.error('未找到 sd-status-container 元素');
     }
@@ -475,7 +463,7 @@ function displayImages(taskId, fileNames, seeds, translatedPrompt) {
         imageWrapper.style.display = 'flex';
         imageWrapper.style.flexDirection = 'column';
         imageWrapper.style.alignItems = 'center';
-        imageWrapper.style.position = 'relative';
+        imageWrapper.style.position = 'relative'; // 添加相对定位
 
         const img = document.createElement('img');
         img.src = `${apiUrl}/images/sd/${taskId}/${fileName}`;
@@ -495,8 +483,18 @@ function displayImages(taskId, fileNames, seeds, translatedPrompt) {
         const seedInfo = document.createElement('div');
         seedInfo.textContent = `种子：${seeds[index]}`;
 
-        infoContainer.appendChild(seedInfo);       
+        const uploadButton = document.createElement('button');
+        uploadButton.textContent = '上传本地图片';
+        uploadButton.style.backgroundColor = '#4CAF50';
+        uploadButton.style.color = 'white';
+        uploadButton.style.border = 'none';
+        uploadButton.style.padding = '5px 10px';
+        uploadButton.style.borderRadius = '3px';
+        uploadButton.style.cursor = 'pointer';
+        uploadButton.onclick = () => uploadLocalImage(img);
 
+        infoContainer.appendChild(seedInfo);
+        infoContainer.appendChild(uploadButton);
 
         imageWrapper.appendChild(img);
         imageWrapper.appendChild(infoContainer);
@@ -514,7 +512,7 @@ function displayImages(taskId, fileNames, seeds, translatedPrompt) {
     }
 }
 
-function uploadLocalImage() {
+function uploadLocalImage(targetImg) {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
@@ -524,7 +522,8 @@ function uploadLocalImage() {
             try {
                 const compressedImage = await compressImageIfNeeded(file);
                 const imageUrl = URL.createObjectURL(compressedImage);
-                openPreviewWindow(imageUrl);
+                targetImg.src = imageUrl;
+                updateStatus('图片已成功替换', 3000);
             } catch (error) {
                 console.error('Error processing image:', error);
                 updateStatus('图片处理失败，请重试', 3000);
@@ -534,7 +533,6 @@ function uploadLocalImage() {
     input.click();
 }
 
-// 确保这个函数已经定义或从其他模块导入
 async function compressImageIfNeeded(file) {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -566,7 +564,7 @@ function getCookie(name) {
 
 // 在文件末尾添加初始化代码
 document.addEventListener('DOMContentLoaded', function() {
-    console.debug('DOM 内容已加载开始初始化 SD 模块');
+    console.debug('DOM 内容已加载，开始初始化 SD 模块');
     initSD();
 });
 
@@ -587,7 +585,7 @@ function updateDebugLog(message) {
     }
 }
 
-// 在文件开头或初始化函数添加这段代码
+// 在文件开头或初始化函数中添加这段代码
 function initDebugMode() {
     const debugLogElement = document.getElementById('debug-log');
     if (debugLogElement) {
@@ -621,7 +619,7 @@ function populateLoraSelect(models) {
     defaultOption.textContent = '不使用Lora';
     loraSelect.appendChild(defaultOption);
 
-    // 加从后端获取的模型选项
+    // 添加从后端获取的模型选项
     models.forEach(model => {
         const option = document.createElement('option');
         option.value = model.value;
@@ -804,4 +802,3 @@ function updateLoraWeight() {
         }
     }
 }
-

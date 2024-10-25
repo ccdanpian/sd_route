@@ -8,10 +8,9 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2285%22>😺</text></svg>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        #history-btn {
+        #history-btn, #upload-local-btn {
             position: absolute;
             top: 10px;
-            right: 80px; /* 调整位置到右上角，留出用户信息的空间 */
             font-size: 24px;
             background: none;
             border: none;
@@ -19,10 +18,16 @@
             z-index: 1000;
             color: #333;
         }
-        #history-btn:hover {
+        #history-btn {
+            right: 80px;
+        }
+        #upload-local-btn {
+            right: 120px;
+        }
+        #history-btn:hover, #upload-local-btn:hover {
             color: #007bff;
         }
-        #history-btn svg {
+        #history-btn svg, #upload-local-btn svg {
             width: 23px;
             height: 23px;
         }
@@ -34,6 +39,15 @@
         <svg viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg">
             <circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="2" fill="none"/>
             <line x1="14" y1="14" x2="20" y2="20" stroke="currentColor" stroke-width="2"/>
+        </svg>
+    </button>
+
+    <!-- 添加上传本地图片按钮 -->
+    <button id="upload-local-btn" title="上传本地图片">
+        <svg xmlns="http://www.w3.org/2000/svg" width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
         </svg>
     </button>
 
@@ -96,7 +110,10 @@
             <div class="button-container">
                 <button id="sd-generate-btn">生成FLUX图像</button>
             </div>
-            <div id="sd-status-container"></div>
+            <div id="sd-status-container">
+                <span id="sd-status-text">状态: 准备就绪</span>
+                <!-- 上传按钮将通过 JavaScript 动态添加到这里 -->
+            </div>
             <div id="sd-result-container"></div>
         </div>
         <textarea id="debug-log" rows="10" cols="50" readonly style="width: 100%; margin-top: 20px; display: none;"></textarea>
@@ -175,13 +192,19 @@
     </script>
 
     <script type="module" src="static/sd.js"></script>
+    <script type="module" src="static/upload.js"></script>
 
-    <!-- 添加历史功能脚本 -->
+    <!-- 添加历史功能脚本和初始化上传按钮 -->
     <script type="module">
+        import { initUploadButton } from './static/upload.js';
+
         function openHistoryTab() {
-    window.open('./static/history.html', '_blank');
-}
+            window.open('./static/history.html', '_blank');
+        }
         document.getElementById('history-btn').addEventListener('click', openHistoryTab);
+
+        // 初始化上传按钮
+        document.addEventListener('DOMContentLoaded', initUploadButton);
     </script>
 </body>
 </html>

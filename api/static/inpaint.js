@@ -1,4 +1,4 @@
-// Global variables
+// inpaints.js
 let selectedImage = null;
 let maskImage = null;
 let isDrawing = false;
@@ -14,9 +14,7 @@ let statusTimeout;
 
 let globalExpandSelect; // 在文件顶部声明
 
-export function openPreviewWindow(src, taskId) {
-    // 使用传入的 taskId，而不是全局变量
-    
+export function openPreviewWindow(src, taskId = null) {
     const previewWindow = document.createElement('div');
     previewWindow.id = 'previewWindow';
     previewWindow.style.position = 'fixed';
@@ -42,7 +40,7 @@ export function openPreviewWindow(src, taskId) {
     promptContainer.style.alignItems = 'center';
     promptContainer.style.marginBottom = '10px';
 
-    // 添加扩展选择下拉框
+    // 添加扩展选择下拉框（对所有情况都添加）
     const expandSelect = document.createElement('select');
     expandSelect.id = 'expandSelect';
     expandSelect.style.marginRight = '10px';
@@ -59,9 +57,8 @@ export function openPreviewWindow(src, taskId) {
         expandSelect.appendChild(optionElement);
     });
     promptContainer.appendChild(expandSelect);
-
-    // 添加事件监听器
     expandSelect.addEventListener('change', handleExpandSelectChange);
+    globalExpandSelect = expandSelect;
 
     const promptInput = document.createElement('input');
     promptInput.type = 'text';
@@ -71,18 +68,9 @@ export function openPreviewWindow(src, taskId) {
     promptInput.style.marginRight = '10px';
 
     const sendButton = createButton('发送重绘', () => {
-        if (globalExpandSelect) {
-            document.body.removeChild(previewWindow);
-            // 如果prompt不为空，则使用prompt，否则使用绘图的prompt
-            if(promptInput.value) 
-                prompt = promptInput.value;
-            else
-                prompt = document.getElementById('sd-prompt').value;    
-            sendMaskedImage(prompt);  
-        } else {
-            console.error('Preview window not fully initialized');
-            updateStatus("重绘失败：预览窗口未初始化");
-        }
+        document.body.removeChild(previewWindow);
+        const prompt = promptInput.value || document.getElementById('sd-prompt').value;
+        sendMaskedImage(prompt);
     });
 
     promptContainer.appendChild(promptInput);
@@ -126,8 +114,8 @@ export function openPreviewWindow(src, taskId) {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0);
         originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        originalImage = img; // 保存真正的原始图片
-        maskImage = document.createElement('canvas');  // 使用全局变量 maskImage
+        originalImage = img;
+        maskImage = document.createElement('canvas');
         maskImage.width = canvas.width;
         maskImage.height = canvas.height;
         resetMask();
@@ -143,8 +131,6 @@ export function openPreviewWindow(src, taskId) {
     canvas.addEventListener('touchstart', handleTouchStart);
     canvas.addEventListener('touchmove', handleTouchMove);
     canvas.addEventListener('touchend', handleTouchEnd);
-
-    globalExpandSelect = expandSelect; // 设置全局变量
 }
 
 function createButton(text, onClick) {
