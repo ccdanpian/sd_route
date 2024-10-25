@@ -25,8 +25,8 @@ export async function searchImages(loadMore = false) {
             keyword, 
             start_date: startDate, 
             end_date: endDate,
-            page: currentPage,
-            per_page: perPage
+            page: currentPage
+            // per_page: perPage
         });
         
         displayResults(data.images);
