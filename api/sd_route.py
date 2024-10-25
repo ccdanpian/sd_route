@@ -739,7 +739,7 @@ def get_user_info():
 def inpaint_image(task):
     task_id = task['task_id']
     logger.info(f"开始重绘任务: task_id={task_id}")
-    update_task_status(task_id, "重中...", 0)
+    update_task_status(task_id, "重绘中...", 0)
     
     prompt = task.get('prompt')
     original_image = task.get('original_image')
