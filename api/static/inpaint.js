@@ -314,10 +314,8 @@ async function sendMaskedImage(inpaintPrompt) {
 }
 async function pollTaskStatus(taskId) {
     const pollInterval = 2000; // 每2秒轮询一次
-    const maxAttempts = 30; // 最多轮询30次（1分钟）
-    let attempts = 0;
 
-    while (attempts < maxAttempts) {
+    while (true) {
         try {
             const response = await fetch(`${apiUrl}/sd/task_status/${taskId}`);
             if (!response.ok) {
@@ -325,47 +323,39 @@ async function pollTaskStatus(taskId) {
             }
 
             const result = await response.json();
-            // console.log(`Task status (attempt ${attempts + 1}):`, result);
 
             if (result.status === '重绘完成') {
                 console.log('重绘任务完成，处理结果');
-                hideLoadingIndicator();  // 添加这行
                 processTaskResult(result);
                 return;
             } else if (result.status === '重绘失败') {
                 console.error('重绘任务失败:', result.error);
-                throw new Error(result.error || "重绘任务失败");
+                updateStatus("重绘失败：" + (result.error || "未知错误"));
+                return;
             } else if (result.status === '未知任务') {
                 console.warn(`未知任务 ID: ${taskId}`);
                 updateStatus("重绘失败：未知任务");
                 return;
             }
 
-            // 如果任务仍在进行中，更新进度
-            // (`重绘进度: ${result.progress}%`);
-            updateStatus(`重绘处理中：${result.status} (${result.progress}%)`);
+            // 更新进度
+            if (result.status === '排队中') {
+                updateStatus(`排队中，当前位置：${result.queuePosition + 1}/${result.max_queue_size}`);
+            } else {
+                updateStatus(`重绘处理中：${result.status} (${result.progress}%)`);
+            }
 
             // 等待一段时间后再次轮询
             await new Promise(resolve => setTimeout(resolve, pollInterval));
-            attempts++;
         } catch (error) {
             console.error('轮询错误:', error);
-            hideLoadingIndicator();
             updateStatus("重绘失败：" + error.message);
             return;
         }
     }
-
-    // 如果达到最大尝试次数仍未完成，视为超时
-    console.error('重绘任务超时');
-    hideLoadingIndicator();
-    updateStatus("重绘失败：任务超时");
 }
 function processTaskResult(result) {
-    // console.log('处理重绘任务结果:', result);
-    hideLoadingIndicator();
     if (result.inpainted_image_url) {
-        // console.log('显示重绘结果图片:', result.inpainted_image_url);
         displayInpaintedImage(result.inpainted_image_url, result.inpaint_prompt);
         updateStatus("重绘完成", 5000);  // 显示5秒
     } else {
@@ -534,109 +524,25 @@ function saveMask() {
 }
 
 function showLoadingIndicator() {
-    const loadingIndicator = document.createElement('div');
-    loadingIndicator.id = 'loadingIndicator';
-    loadingIndicator.style.position = 'fixed';
-    loadingIndicator.style.top = '0';
-    loadingIndicator.style.left = '0';
-    loadingIndicator.style.width = '100%';
-    loadingIndicator.style.height = '100%';
-    loadingIndicator.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-    loadingIndicator.style.display = 'flex';
-    loadingIndicator.style.justifyContent = 'center';
-    loadingIndicator.style.alignItems = 'center';
-    loadingIndicator.style.zIndex = '1000';
-
-    const spinner = document.createElement('div');
-    spinner.style.width = '50px';
-    spinner.style.height = '50px';
-    spinner.style.border = '5px solid #f3f3f3';
-    spinner.style.borderTop = '5px solid #3498db';
-    spinner.style.borderRadius = '50%';
-    spinner.style.animation = 'spin 1s linear infinite';
-
-    const loadingText = document.createElement('div');
-    loadingText.id = 'statusMessage';
-    loadingText.textContent = '重绘中，请稍候...';
-    loadingText.style.color = 'white';
-    loadingText.style.marginTop = '20px';
-    loadingText.style.fontSize = '18px';
-
-    const loadingContent = document.createElement('div');
-    loadingContent.style.display = 'flex';
-    loadingContent.style.flexDirection = 'column';
-    loadingContent.style.alignItems = 'center';
-
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    `;
-
-    document.head.appendChild(style);
-    loadingContent.appendChild(spinner);
-    loadingContent.appendChild(loadingText);
-    loadingIndicator.appendChild(loadingContent);
-    document.body.appendChild(loadingIndicator);
-
-    // 防止点击事件穿透到下层元素
-    loadingIndicator.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-    });
+    updateStatus("正在提交重绘任务...");
 }
-
-// 确保正确导出 openPreviewWindow 函数
-// export { openPreviewWindow };
 
 function hideLoadingIndicator() {
-    const loadingIndicator = document.getElementById('loadingIndicator');
-    if (loadingIndicator) {
-        document.body.removeChild(loadingIndicator);
-    }
+    // 不需要执行任何操作，因为状态更新会在其他函数中处理
 }
 
-function updateStatus(message, duration = 5000, position = 'top') {
-    clearTimeout(statusTimeout);
-
-    let statusElement = document.getElementById('statusMessage');
-    if (!statusElement) {
-        statusElement = document.createElement('div');
-        statusElement.id = 'statusMessage';
-        statusElement.style.position = 'fixed';
-        statusElement.style.left = '50%';
-        statusElement.style.transform = 'translateX(-50%)';
-        statusElement.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-        statusElement.style.color = 'white';
-        statusElement.style.padding = '10px';
-        statusElement.style.borderRadius = '5px';
-        statusElement.style.zIndex = '1001';
-        statusElement.style.transition = 'opacity 0.5s ease-in-out';
-        document.body.appendChild(statusElement);
-    }
-
-    // 根据位置设置 top 或 bottom
-    if (position === 'top') {
-        statusElement.style.top = '10px';
-        statusElement.style.bottom = 'auto';
+function updateStatus(message, duration = 0) {
+    const statusContainer = document.getElementById('sd-status-container');
+    if (statusContainer) {
+        statusContainer.textContent = message;
+        if (duration > 0) {
+            setTimeout(() => {
+                statusContainer.textContent = '';
+            }, duration);
+        }
     } else {
-        statusElement.style.bottom = '10px';
-        statusElement.style.top = 'auto';
+        console.error('未找到 sd-status-container 元素');
     }
-
-    statusElement.textContent = message;
-    statusElement.style.display = 'block';
-    statusElement.style.opacity = '1';
-
-    // 设置定时器，5秒后淡出消失
-    statusTimeout = setTimeout(() => {
-        statusElement.style.opacity = '0';
-        setTimeout(() => {
-            statusElement.style.display = 'none';
-        }, 500);  // 等待淡出动画完成后隐藏元素
-    }, duration);
 }
 
 function handleTouchStart(e) {
