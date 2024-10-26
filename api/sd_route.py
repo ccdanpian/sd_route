@@ -877,7 +877,30 @@ def inpaint_image(task):
         # 构建图片URL
         image_url = f"/images/sd/{task_id}/{file_name}"
 
-        logger.info(f"重绘任完成: task_id={task_id}")
+        # 将重绘的图片保存到数据库
+        with app.app_context():
+            try:
+                # 将 PNG base64 转换为 JPEG base64
+                jpg_base64 = png_to_jpg_base64(inpainted_image)
+
+                new_image = Image(
+                    user_id=task['user_id'],
+                    prompt=task['prompt'],
+                    base64=jpg_base64,
+                    seed=-1,  # 重绘通常不使用种子，所以设为-1
+                    model=task['model_name'],
+                    lora=task.get('lora', ''),
+                    created_at=datetime.utcnow()
+                )
+                db.session.add(new_image)
+                db.session.commit()
+                logger.info(f"重绘图片信息已保存到数据库: task_id={task_id}")
+            except Exception as e:
+                logger.error(f"保存重绘图片信息到数据库时出错: {str(e)}")
+                logger.error(f"错误详情: {traceback.format_exc()}")
+                db.session.rollback()
+
+        logger.info(f"重绘任务完成: task_id={task_id}")
         update_task_status(task_id, "重绘完成", 100, inpainted_image_url=image_url)
 
         return {
@@ -885,7 +908,7 @@ def inpaint_image(task):
             "message": "图片重绘完成",
             "file_name": file_name,
             "save_time": timestamp,
-            "inpaint_prompt": task['prompt']  # 添加这行
+            "inpaint_prompt": task['prompt']
         }
 
     except Exception as e:
