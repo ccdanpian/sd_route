@@ -680,7 +680,8 @@ def inpaint():
             'denoising_strength': data.get('denoising_strength', 0.7),
             'model_name': data.get('model_name', "realisticVisionV51_v51VAE.safetensors"),
             'model': SD_MODEL,
-            'ip_address': ip_address
+            'ip_address': ip_address,
+            'user_id': session['user_id']  # 添加用户ID到任务中
         }
 
         # 如果有 LoRA 信息，也添加到任务中
@@ -688,7 +689,6 @@ def inpaint():
             lora_name = data.get('lora_name', '')
             lora_weight = data.get('lora_weight', 0.7)
             task['model'] += f"<lora:{lora_name}:{lora_weight}>"
-
 
         if task_queue.qsize() >= MAX_QUEUE_SIZE:
             if ENABLE_IP_RESTRICTION:
