@@ -8,7 +8,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2285%22>😺</text></svg>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        #history-btn, #upload-local-btn {
+        #history-btn, #upload-local-btn, #prompt-optimize-btn {
             position: absolute;
             top: 10px;
             font-size: 24px;
@@ -24,12 +24,18 @@
         #upload-local-btn {
             right: 120px;
         }
-        #history-btn:hover, #upload-local-btn:hover {
+        #prompt-optimize-btn {
+            right: 160px;
+        }
+        #history-btn:hover, #upload-local-btn:hover, #prompt-optimize-btn:hover {
             color: #007bff;
         }
-        #history-btn svg, #upload-local-btn svg {
+        #history-btn svg, #upload-local-btn svg, #prompt-optimize-btn svg {
             width: 23px;
             height: 23px;
+        }
+        .active-btn {
+            color: #007bff !important;
         }
     </style>
 </head>
@@ -48,6 +54,15 @@
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="17 8 12 3 7 8"></polyline>
             <line x1="12" y1="3" x2="12" y2="15"></line>
+        </svg>
+    </button>
+
+    <!-- 添加prompt优化按钮 -->
+    <button id="prompt-optimize-btn" title="Prompt优化">
+        <svg xmlns="http://www.w3.org/2000/svg" width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5z"/>
+            <path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
         </svg>
     </button>
 
@@ -166,6 +181,37 @@
             sdPrompt.addEventListener('focus', function() {
                 this.select();
             });
+
+            // 添加prompt优化按钮的功能
+            const promptOptimizeBtn = document.getElementById('prompt-optimize-btn');
+            let isPromptOptimizeActive = false;
+
+            promptOptimizeBtn.addEventListener('click', function() {
+                isPromptOptimizeActive = !isPromptOptimizeActive;
+                this.classList.toggle('active-btn', isPromptOptimizeActive);
+                // 这里可以添加一些视觉反馈，比如改变按钮颜色
+                if (isPromptOptimizeActive) {
+                    console.log('Prompt优化已启用');
+                    // 在这里添加启用prompt优化的逻辑
+                } else {
+                    console.log('Prompt优化已禁用');
+                    // 在这里添加禁用prompt优化的逻辑
+                }
+            });
+
+            // 生成或获取 tmp_id
+            function getTmpId() {
+                let tmpId = localStorage.getItem('tmp_id');
+                if (!tmpId) {
+                    tmpId = 'tmp_' + Math.random().toString(36).substr(2, 9);
+                    localStorage.setItem('tmp_id', tmpId);
+                }
+                return tmpId;
+            }
+
+            // 调用函数获取 tmp_id
+            const tmpId = getTmpId();
+            console.log('Current tmp_id:', tmpId);
         });
 
         document.addEventListener('DOMContentLoaded', function() {

@@ -272,12 +272,22 @@ async function generateImages() {
     generateBtn.disabled = true;
     clearPreviousImages();
 
+    // 生成或获取 tmp_id
+    let tmpId = localStorage.getItem('tmp_id');
+    if (!tmpId) {
+        tmpId = 'tmp_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('tmp_id', tmpId);
+    }
+    updateDebugLog(`使用 tmp_id: ${tmpId}`);
+
     const [width, height] = document.getElementById('sd-size').value.split('x').map(Number);
     const loraSelect = document.getElementById('sd-lora');
     const loraValue = loraSelect.value;
     const selectedOption = loraSelect.options[loraSelect.selectedIndex];
     const loraTriggerWords = selectedOption ? selectedOption.dataset.triggerWords : '';
     const loraWeight = parseFloat(document.getElementById('sd-lora-weight').value);
+
+    const promptOptimizeBool = document.getElementById('prompt-optimize-btn').classList.contains('active-btn');
     
     const params = {
         prompt: document.getElementById('sd-prompt').value,
@@ -291,6 +301,8 @@ async function generateImages() {
         lora_name: loraValue,
         lora_trigger_words: loraTriggerWords,
         lora_weight: loraWeight,
+        prompt_optimize: promptOptimizeBool,
+        tmp_id: tmpId  // 添加 tmp_id 到请求参数中
     };
 
     if (!params.lora) {
@@ -322,7 +334,7 @@ async function generateImages() {
         await checkStatus(response.task_id);
 
     } catch (error) {
-        updateDebugLog(`成图像时发生错误: ${error.message}`);
+        updateDebugLog(`生成图像时发生错误: ${error.message}`);
         if (error.response && error.response.error) {
             updateStatus(`生成失败：${error.response.error}`);
         } else {
@@ -816,3 +828,4 @@ function hideUserInfoContainer() {
         userInfoContainer.style.display = 'none';
     }
 }
+

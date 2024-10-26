@@ -28,6 +28,7 @@ from sqlalchemy import desc
 import sqlite3
 import traceback
 from urllib.parse import urljoin
+from collections import deque, defaultdict
 
 # 禁用SSL警告（仅用于测试环境）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -120,6 +121,12 @@ task_lock = threading.Lock()
 # 添加一个字典来跟踪 IP 地址的活跃请求
 active_ip_requests = {}
 ip_lock = threading.Lock()
+
+# 配置部分
+MAX_CONVERSATION_TURNS = int(os.getenv('MAX_CONVERSATION_TURNS', '10'))  # 默认为10轮
+
+# 使用 defaultdict 和 deque 来存储用户对话
+user_conversations = defaultdict(lambda: deque(maxlen=MAX_CONVERSATION_TURNS))
 
 def start_next_task():
     with task_lock:
@@ -502,6 +509,8 @@ def generate():
             active_ip_requests[ip_address] = True
 
     prompt = data.get('prompt')
+    prompt_optimize = data.get('prompt_optimize', False)
+    tmp_id = data.get('tmp_id')
     
     # 检查提示词是否为 None 或空字符串
     if prompt is None or prompt.strip() == '':
@@ -518,15 +527,22 @@ def generate():
                     active_ip_requests.pop(ip_address, None)
             return jsonify({"error": "提示词可能包含不适当的内容。请修改后重试。"}), 400
 
-        translated_prompt = translate_to_english(prompt) if prompt else ''
-        
-        # 处理翻译后的提示词
-        if translated_prompt is None or translated_prompt.strip() == '':
-            translated_prompt = ''
-            logger.info("翻译后得到空提示词")
+        if prompt_optimize:
+            # 获取用户的对话历史
+            conversation_history = user_conversations[tmp_id]         
+            
+            # 使用对话历史进行翻译
+            translated_prompt = translate_to_english_with_history(prompt, list(conversation_history), tmp_id)
+            
+            # 添加user和AI的回复（右进）
+            conversation_history.append({"role": "user", "content": prompt})
+            conversation_history.append({"role": "assistant", "content": translated_prompt})
+            
+            # 如果超出最大轮数，最早的对话会自动被移除（左出）
         else:
-            translated_prompt = translated_prompt.strip()
-
+            # 单次翻译，不使用对话历史
+            translated_prompt = translate_to_english(prompt) if prompt else ''
+        
         task_id = str(uuid4())
         logger.info(f"创建新的重绘任务: task_id={task_id}, original_prompt='{prompt}', translated_prompt='{translated_prompt}'")
 
@@ -1185,6 +1201,31 @@ def delete_image():
         db.session.rollback()
         logger.error(f"删除图片时发生错误: {str(e)}")
         return jsonify({"error": "删除图片时发生错误"}), 500
+
+def translate_to_english_with_history(prompt, conversation_history, tmp_id):
+    try:
+        logger.info(f"正在使用对话历史将提示词翻译为英语: {conversation_history}")
+       
+        response = client.chat.completions.create(
+            model=CHATGPT_MODEL,
+            messages=[
+                {"role": "system", "content": CONTENT_TRANSLATION_PROMPT},
+                *conversation_history,  # 使用全部对话历史，因为已经在 deque 中限制了长度
+                {"role": "user", "content": prompt + "。请根据上述多轮对话，优化stable diffusion的提示词，然后根据system prompt的要求，生成英文的prompt。"}
+            ]
+        )
+        
+        if not response.choices:
+            logger.error("ChatGPT API 响应中没有选项")
+            return conversation_history[-1]["content"]  # 返回原始提示词
+
+        translated_prompt = response.choices[0].message.content.strip()
+        logger.info(f"******多轮优化的翻译结果: {translated_prompt}")
+        
+        return translated_prompt
+    except Exception as e:
+        logger.error(f"ChatGPT API调用错误: {str(e)}")
+        return conversation_history[-1]["content"]  # 如果API调用失败，返回原始prompt
 
 if __name__ == '__main__':
     logger.info(f"启动服务器,端口 25001, AUTH_SERVICE_URL: {AUTH_SERVICE_URL}")
