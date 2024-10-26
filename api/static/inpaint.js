@@ -590,8 +590,10 @@ function sendImageToTop(imageUrl, prompt) {
             // 显示一个提示消息
             updateStatus("图片已发送到上方，可以继续编辑", 3000);
         } else {
-            console.error('未在原图容器中找到图片元素');
-            updateStatus("操作失败：未找到原图元素", 3000);
+            // 如果原图容器中没有图片元素，则创建一个
+            const originalImage = document.createElement('img');
+            originalImage.src = imageUrl;
+            originalImageContainer.appendChild(originalImage);
         }
     } else {
         console.error('未找到原图容器');
