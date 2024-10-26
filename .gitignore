@@ -3,3 +3,6 @@ api/images/
 api/instance/
 api/tmp/
 api/api
+api/database_bak/temp/
+api/database_bak/backup/
+api/logs/
