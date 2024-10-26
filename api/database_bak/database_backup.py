@@ -20,6 +20,9 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+# 确保日志文件夹存在
+os.makedirs('./logs', exist_ok=True)
+
 # 创建一个rotating file handler
 file_handler = RotatingFileHandler('./logs/database_backup.log', maxBytes=1024*1024, backupCount=5)
 file_handler.setLevel(logging.INFO)
@@ -369,4 +372,3 @@ if __name__ == "__main__":
     while True:
         schedule.run_pending()
         time.sleep(1)
-

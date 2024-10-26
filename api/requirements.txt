@@ -9,3 +9,4 @@ Pillow
 openai
 PyJWT
 urllib3
+schedule
