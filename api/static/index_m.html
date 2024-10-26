@@ -56,12 +56,6 @@
             <h1>Flux dev</h1>
             <!-- 添加认证部分 -->
             <div id="auth-section"></div>
-            <!-- 修改认证部分 -->
-            <div id="auth-section">
-                <button id="login-btn" style="display: none;">登录</button>
-                <button id="logout-btn" style="display: none;">登出</button>
-                <span id="user-info" style="display: none;"></span>
-            </div>
         </div>
         <div id="sd-image-generation-container">
             <div class="input-container-sd">
@@ -111,7 +105,7 @@
                 <button id="sd-generate-btn">生成FLUX图像</button>
             </div>
             <div id="sd-status-container">
-                <span id="sd-status-text">状态: 准备就绪</span>
+                <span id="sd-status-text"></span>
                 <!-- 上传按钮将通过 JavaScript 动态添加到这里 -->
             </div>
             <div id="sd-result-container"></div>

@@ -81,6 +81,9 @@ function logout() {
                 clearUserInfo();
                 showLoginButton();
                 updateUIForAuth();
+                
+                // 添加这行来隐藏用户信息容器
+                hideUserInfoContainer();
             } else {
                 console.warn('登出部分成功:', data.message);
                 updateDebugLog('登出警告:', data.message);
@@ -805,3 +808,11 @@ function updateLoraWeight() {
     }
 }
 
+// 添加这个新函数来隐藏用户信息容器
+function hideUserInfoContainer() {
+    const userInfoContainer = document.querySelector('.user-info-container');
+    if (userInfoContainer) {
+        userInfoContainer.classList.remove('expanded');
+        userInfoContainer.style.display = 'none';
+    }
+}
