@@ -714,7 +714,7 @@ def inpaint():
 
         queue_position = task_queue.qsize()
         task_queue.put(task)
-        task_status[task_id] = {"status": "排队中" if queue_position > 0 else "处理中", "progress": 0, "queuePosition": queue_position}
+        task_status[task_id] = {"status": "排队中" if queue_position > 0 else "处理中", "progress": 0, "queuePosition": queue_position, "max_queue_size": task_queue.qsize()}
 
         if queue_position == 0:
             threading.Thread(target=process_task, args=(task, session['user_id'], ip_address)).start()
