@@ -560,44 +560,75 @@ function sendImageToTop(imageUrl, prompt) {
     console.log('imageUrl:', imageUrl);
     console.log('prompt:', prompt);
 
-    // 查找原图容器
-    const originalImageContainer = document.getElementById('sd-result-container');
-    if (originalImageContainer) {
-        console.log('找到原图容器');
+    const resultContainer = document.getElementById('sd-result-container');
+    if (resultContainer) {
+        console.log('找到 sd-result-container');
 
-        // 查找原图容器中的图片元素
-        const originalImage = originalImageContainer.querySelector('img');
-        if (originalImage) {
-            console.log('找到原图元素');
+        // 清空容器
+        resultContainer.innerHTML = '';
 
-            // 替换原图的 src
-            originalImage.src = imageUrl;
-            console.log('替换了原图的 src');
+        // 创建并添加 prompt 段落
+        const promptParagraph = document.createElement('p');
+        promptParagraph.textContent = prompt;
+        resultContainer.appendChild(promptParagraph);
 
-            // 更新相关的输入字段
-            const promptInput = document.getElementById('sd-prompt');
-            if (promptInput) {
-                promptInput.value = prompt;
-                console.log('更新了 prompt 输入字段');
-            } else {
-                console.log('未找到 prompt 输入字段');
-            }
+        // 创建 container_images_sd
+        const containerImagesSD = document.createElement('div');
+        containerImagesSD.className = 'container_images_sd';
+        containerImagesSD.dataset.taskId = 'uploaded_' + Date.now();
+        containerImagesSD.style.cssText = 'display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;';
 
-            // 滚动到页面顶部
-            window.scrollTo(0, 0);
-            console.log('滚动到页面顶部');
+        // 创建 image-wrapper
+        const imageWrapper = document.createElement('div');
+        imageWrapper.className = 'image-wrapper';
+        imageWrapper.style.cssText = 'display: flex; flex-direction: column; align-items: center; position: relative;';
 
-            // 显示一个提示消息
-            updateStatus("图片已发送到上方，可以继续编辑", 3000);
-        } else {
-            // 如果原图容器中没有图片元素，则创建一个
-            const originalImage = document.createElement('img');
-            originalImage.src = imageUrl;
-            originalImageContainer.appendChild(originalImage);
+        // 创建图片元素
+        const img = document.createElement('img');
+        img.src = imageUrl;
+        img.alt = '上传的图像';
+        img.className = 'sd-image';
+        img.dataset.taskId = containerImagesSD.dataset.taskId;
+        img.style.cssText = 'max-width: 100%; height: auto;';
+        img.onclick = function() {
+            openPreviewWindow(imageUrl);
+        };
+
+        // 创建信息div
+        const infoDiv = document.createElement('div');
+        infoDiv.style.cssText = 'display: flex; justify-content: space-between; width: 100%; margin-top: 5px;';
+        const seedDiv = document.createElement('div');
+        seedDiv.textContent = '种子：上传图片';
+        infoDiv.appendChild(seedDiv);
+
+        // 组装元素
+        imageWrapper.appendChild(img);
+        imageWrapper.appendChild(infoDiv);
+        containerImagesSD.appendChild(imageWrapper);
+        resultContainer.appendChild(containerImagesSD);
+
+        // 更新相关的输入字段
+        const promptInput = document.getElementById('sd-prompt');
+        if (promptInput) {
+            promptInput.value = prompt;
+            console.log('更新了 prompt 输入字段');
         }
+
+        // 重置全局变量
+        selectedImage = null;
+        maskImage = null;
+        originalImageData = null;
+        originalImage = null;
+
+        // 滚动到页面顶部
+        window.scrollTo(0, 0);
+        console.log('滚动到页面顶部');
+
+        // 显示一个提示消息
+        updateStatus("图片已发送到上方，可以继续编辑", 3000);
     } else {
-        console.error('未找到原图容器');
-        updateStatus("操作失败：未找到原图容器", 3000);
+        console.error('未找到 sd-result-container');
+        updateStatus("操作失败：未找到图片容器", 3000);
     }
 
     console.log('sendImageToTop 函数执行完毕');
