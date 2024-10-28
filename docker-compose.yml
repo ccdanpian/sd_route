@@ -2,9 +2,7 @@ version: '3.8'
 
 services:
   flux-service:
-    build:
-      context: ./flux
-      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME}/flux:latest
     ports:
       - "${SD_ROUTE_PORT:-25001}:${SD_ROUTE_PORT:-25001}"
     volumes:
@@ -16,9 +14,7 @@ services:
       - app-network
 
   oauth-service:
-    build:
-      context: ./oauth
-      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME}/oauth:latest
     ports:
       - "${AUTH_SERVICE_PORT:-25002}:${AUTH_SERVICE_PORT:-25002}"
     volumes:
@@ -30,7 +26,7 @@ services:
 
 networks:
   app-network:
-    driver: bridge
+    driver: host
 
 volumes:
   images-data:
