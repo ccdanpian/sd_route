@@ -1,0 +1,12 @@
+Flask
+Flask-SQLAlchemy
+requests
+python-dotenv
+gunicorn
+psycopg2-binary
+flask_cors
+Pillow
+openai
+PyJWT
+urllib3
+schedule

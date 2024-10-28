@@ -37,7 +37,15 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+# 获取当前文件的目录
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# 获取项目根目录
+root_dir = os.path.dirname(current_dir)
+
+app = Flask(__name__, 
+    static_folder=os.path.join(root_dir, 'static'),  # 指定静态文件夹的绝对路径
+    static_url_path='/static'  # 指定静态文件的URL前缀
+)
 CORS(app, supports_credentials=True)
 
 # 数据库配置
@@ -66,7 +74,7 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY') or secrets.token_hex(16)
 # 环境变量获取配置
 load_dotenv()
 SD_URL = os.getenv('SD_URL', 'https://127.0.0.1:7860')
-OUTPUT_DIR = os.getenv('SD_OUTPUT_DIR', 'output')
+OUTPUT_DIR = os.getenv('SD_OUTPUT_DIR', os.path.join(root_dir, 'images', 'sd'))
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 OPENAI_API_BASE = os.getenv('OPENAI_API_BASE')
 ENABLE_IP_RESTRICTION = os.getenv('ENABLE_IP_RESTRICTION', 'False').lower() == 'true'
@@ -404,7 +412,7 @@ def translate_to_english(prompt):
 
 @app.route('/')
 def index():
-    return send_from_directory('static', 'index_m.html')
+    return send_from_directory(os.path.join(root_dir, 'static'), 'index_m.html')
 
 def get_client_ip():
     if request.headers.get('X-Forwarded-For'):
@@ -609,7 +617,12 @@ def get_status(task_id):
 @app.route('/images/sd/<task_id>/<path:filename>')
 def serve_image(task_id, filename):
     logger.info(f"请求图片: {filename}")
-    return send_from_directory(os.path.join(OUTPUT_DIR, task_id), filename)
+    
+    # 构建完整的图片路径
+    image_path = os.path.join(OUTPUT_DIR, task_id)
+    logger.debug(f"图片目录路径: {image_path}")
+    
+    return send_from_directory(image_path, filename)
 
 # 添加这个新函数到文件中
 def encode_image_to_base64(image_path):

@@ -1,6 +1,6 @@
 // upload.js
 
-import { openPreviewWindow } from './inpaint.js';
+import { openPreviewWindow } from '/static/js/inpaint.js';
 
 export function initUploadButton() {
     const uploadBtn = document.getElementById('upload-local-btn');
