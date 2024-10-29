@@ -193,7 +193,7 @@ def update_queue_positions():
             task_id = task['task_id']
             if task_id in task_status and task_status[task_id]['status'] == "排队中":
                 task_status[task_id]['queuePosition'] = i
-
+                task_status[task_id]['max_queue_size'] = task_queue.qsize()
 def update_task_status(task_id, status, progress, **kwargs):
     with task_lock:
         task_status[task_id] = {
@@ -590,7 +590,7 @@ def generate():
 
         queue_position = task_queue.qsize()
         task_queue.put(task)
-        task_status[task_id] = {"status": "排队中" if queue_position > 0 else "处理中", "progress": 0, "queuePosition": queue_position}
+        task_status[task_id] = {"status": "排队中" if queue_position > 0 else "处理中", "progress": 0, "queuePosition": queue_position, "max_queue_size": task_queue.qsize()}
 
         if queue_position == 0:
             threading.Thread(target=process_task, args=(task, session['user_id'], ip_address)).start()
@@ -609,8 +609,10 @@ def get_status(task_id):
     logger.info(f"Received status request for task {task_id}")
     status = task_status.get(task_id, {"status": "未知任务", "progress": 0})
     if status["status"] == "排队中":
-        status["queuePosition"] = next((i for i, task in enumerate(list(task_queue.queue)) if task['task_id'] == task_id), -1)
-        status["max_queue_size"] = task_queue.qsize()
+        # 直接在status中更新queuePosition和max_queue_size
+        status["status"] = "排队中，位置" + str(status["queuePosition"]) + "/" + str(status["max_queue_size"])
+        # status["queuePosition"] = next((i for i, task in enumerate(list(task_queue.queue)) if task['task_id'] == task_id), -1)
+        # status["max_queue_size"] = task_queue.qsize()
     # logger.debug(f"任务 {task_id} 状态: {status}")
     return jsonify(status)
 
