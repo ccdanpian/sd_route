@@ -17,4 +17,4 @@ ENV AUTH_SERVICE_PORT=25002
 # 暴露默认端口
 EXPOSE ${AUTH_SERVICE_PORT}
 
-CMD ["python", "api/auth_route.py"]
+CMD ["python", "api/auth_service.py"]
