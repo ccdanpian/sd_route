@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   flux-service:
-    image: ${DOCKERHUB_USERNAME}/flux:latest
+    image: ccdanpian/flux:latest
     ports:
       - "${SD_ROUTE_PORT:-25001}:${SD_ROUTE_PORT:-25001}"
     volumes:
@@ -14,7 +14,7 @@ services:
       - app-network
 
   oauth-service:
-    image: ${DOCKERHUB_USERNAME}/oauth:latest
+    image: ccdanpian/oauth:latest
     ports:
       - "${AUTH_SERVICE_PORT:-25002}:${AUTH_SERVICE_PORT:-25002}"
     volumes:
