@@ -397,7 +397,8 @@ async function checkStatus(taskId) {
         updateDebugLog(`任务 ${taskId} 状态更新: ${JSON.stringify(response)}`);
 
         updateTaskElement(taskId, response);
-        updateStatus(response.status, response.queuePosition, response.max_queue_size);
+        // updateStatus(response.status, response.queuePosition, response.max_queue_size);
+        updateStatus(response.status);
 
         if (response.status === "完成" && !taskDisplayStatus[taskId]) {
             if (response.file_names && response.seeds && response.translated_prompt) {
