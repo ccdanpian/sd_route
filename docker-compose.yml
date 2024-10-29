@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   flux-service:
     image: ccdanpian/flux:latest
